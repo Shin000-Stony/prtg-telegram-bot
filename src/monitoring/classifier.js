@@ -174,12 +174,12 @@ function classifyCustomer(customer, inventoryItem, monitoringState, cfg) {
 // BUILD CENTRALIZED SUMMARY
 // ============================================================
 
-function buildMonitoringSummary() {
+function buildMonitoringSummary(inventoryOverride) {
 
     const { loadInventory } = require("../prtg/inventory");
     const { loadAllStates } = require("./state-store");
 
-    const inventory = loadInventory();
+    const inventory = inventoryOverride || loadInventory();
     const allStates = loadAllStates();
 
     const stateByCustomer = {};

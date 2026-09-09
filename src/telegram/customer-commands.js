@@ -36,6 +36,8 @@ const {
     renderMappingDetail,
     renderHealthSummary,
     formatClientListItem,
+    renderGroupStatus,
+    renderGroupClientList,
     successMessage,
     errorMessage,
     warningMessage,
@@ -49,6 +51,15 @@ const {
     requireAdmin,
     isAdmin
 } = require("./auth");
+
+const {
+    isGroupChat,
+    requireRegisteredGroup
+} = require("./group-context");
+
+const {
+    getGroupVisibleCustomers
+} = require("../database/telegram-groups");
 
 const {
     hasActiveSession,
@@ -66,9 +77,14 @@ const {
     processConfirmMapSensor
 } = require("./manual-mapping");
 
-const { getInventorySummary } = require("../prtg/inventory");
+const { getInventorySummary, loadInventory } = require("../prtg/inventory");
 
 const { formatDateTimeRelative } = require("../monitoring/classifier");
+
+const {
+    hasActiveGroupSession,
+    clearGroupSession
+} = require("./group-commands");
 
 // ============================================================
 // SESSION MAPS
@@ -165,6 +181,69 @@ function registerCustomerCommands(bot) {
         console.log("[CMD] /clients");
 
         try {
+
+            if (isGroupChat(ctx)) {
+
+                const group = await requireRegisteredGroup(ctx);
+
+                if (!group) {
+                    return;
+                }
+
+                const groupCustomers = getGroupVisibleCustomers(group.id);
+                const clientIds = new Set(
+                    groupCustomers.map(c => c.client_id)
+                );
+
+                const { inventory } = getInventorySummary();
+                const stateByCustomer = {};
+                for (const s of loadAllStates()) {
+                    stateByCustomer[s.customer_id] = s;
+                }
+
+                const filteredInventory = inventory.filter(
+                    item => clientIds.has(item.clientId)
+                );
+
+                const classifications = new Map();
+
+                for (const item of filteredInventory) {
+
+                    const customerLike = {
+                        id: item.customerId,
+                        client_id: item.clientId,
+                        name: item.name,
+                        ip: item.ip,
+                        location: item.location,
+                        service_id: item.serviceId,
+                        description: item.description,
+                        enabled: item.enabled,
+                        monitoring_scope: item.monitoringScope
+                    };
+
+                    const state = stateByCustomer[item.customerId] || null;
+
+                    const classification = classifyCustomer(
+                        customerLike,
+                        item,
+                        state,
+                        config
+                    );
+
+                    classifications.set(item.customerId, classification);
+                }
+
+                await ctx.reply(
+                    renderGroupClientList({
+                        group,
+                        customers: filteredInventory,
+                        classifications,
+                        stateByCustomer
+                    })
+                );
+
+                return;
+            }
 
             const list = customers.getCustomers();
 
@@ -919,9 +998,76 @@ function registerCustomerCommands(bot) {
 
             } else {
 
-                const summary = buildMonitoringSummary();
+                if (isGroupChat(ctx)) {
 
-                await ctx.reply(renderStatusSummary(summary));
+                    const group = await requireRegisteredGroup(ctx);
+
+                    if (!group) {
+                        return;
+                    }
+
+                    const inventory = loadInventory();
+                    const allStates = {};
+
+                    for (const s of loadAllStates()) {
+                        allStates[s.customer_id] = s;
+                    }
+
+                    const groupCustomers = getGroupVisibleCustomers(group.id);
+                    const clientIds = new Set(
+                        groupCustomers.map(c => c.client_id)
+                    );
+
+                    const filteredInventory = inventory.filter(
+                        item => clientIds.has(item.clientId)
+                    );
+
+                    const classificationMap = new Map();
+
+                    for (const item of filteredInventory) {
+
+                        const customer = {
+                            id: item.customerId,
+                            client_id: item.clientId,
+                            name: item.name,
+                            ip: item.ip,
+                            location: item.location,
+                            service_id: item.serviceId,
+                            description: item.description,
+                            enabled: item.enabled,
+                            monitoring_scope: item.monitoringScope
+                        };
+
+                        const state =
+                            allStates[item.customerId] || null;
+
+                        const classification = classifyCustomer(
+                            customer,
+                            item,
+                            state,
+                            config
+                        );
+
+                        classificationMap.set(item.customerId, classification);
+                    }
+
+                    const summary = buildMonitoringSummary(filteredInventory);
+
+                    await ctx.reply(
+                        renderGroupStatus({
+                            group,
+                            customers: filteredInventory,
+                            classifications: classificationMap,
+                            summary
+                        })
+                    );
+
+                } else {
+
+                    const summary = buildMonitoringSummary();
+
+                    await ctx.reply(renderStatusSummary(summary));
+                }
             }
 
         } catch (error) {
@@ -1163,6 +1309,11 @@ function registerCustomerCommands(bot) {
 
         if (scopeSessions.has(userId)) {
             scopeSessions.delete(userId);
+            cancelled = true;
+        }
+
+        if (hasActiveGroupSession(userId)) {
+            clearGroupSession(userId);
             cancelled = true;
         }
 

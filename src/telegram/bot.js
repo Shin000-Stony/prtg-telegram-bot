@@ -16,6 +16,12 @@ const {
 } = require("./customer-commands");
 
 const {
+    registerGroupCommands,
+    hasActiveGroupSession,
+    clearGroupSession
+} = require("./group-commands");
+
+const {
     processAddClient,
     hasActiveSession
 } = require("./add-client");
@@ -24,6 +30,11 @@ const {
     hasActiveSession: hasActiveMappingSession,
     clearSession: clearMappingSession
 } = require("./manual-mapping");
+
+const {
+    isGroupChat,
+    getRegisteredGroup
+} = require("./group-context");
 
 
 // ============================================================
@@ -99,10 +110,37 @@ bot.start(async (ctx) => {
 
     console.log("[CMD] /start");
 
-    await ctx.reply(
-        "🤖 PRTG TELEGRAM MONITOR\n\n" +
-        "Ready. Use /help to get started."
-    );
+    const isGroup = isGroupChat(ctx);
+    const group = isGroup ? getRegisteredGroup(ctx) : null;
+    const groupName = ctx.chat?.title || ctx.message?.chat?.title;
+
+    if (isGroup) {
+        if (group && group.enabled) {
+            await ctx.reply(
+                "🤖 PRTG TELEGRAM MONITOR\n\n" +
+                "Group\n" +
+                groupName + "\n\n" +
+                "Monitoring Access\n" +
+                "✅ REGISTERED\n\n" +
+                "Gunakan:\n" +
+                "/status\n" +
+                "/clients\n" +
+                "/group_clients\n" +
+                "/help"
+            );
+        } else {
+            await ctx.reply(
+                "🤖 PRTG TELEGRAM MONITOR\n\n" +
+                "Group ini belum terdaftar.\n\n" +
+                "Hubungi administrator."
+            );
+        }
+    } else {
+        await ctx.reply(
+            "🤖 PRTG TELEGRAM MONITOR\n\n" +
+            "Ready. Use /help to get started."
+        );
+    }
 });
 
 
@@ -115,6 +153,9 @@ registerCommands(bot);
 
 // Customer management commands
 registerCustomerCommands(bot);
+
+// Telegram group segmentation commands
+registerGroupCommands(bot);
 
 
 // ============================================================
@@ -151,12 +192,17 @@ bot.on("text", async (ctx, next) => {
         const input =
             (ctx.message.text || "").trim().toLowerCase();
 
-        if (
-            input === "/confirm_map" ||
-            input === "/confirm_map_sensor" ||
-            input === "/confirm_unmap" ||
-            input === "/confirm_scope"
-        ) {
+        const allowedConfirmations = [
+            "/confirm_map",
+            "/confirm_map_sensor",
+            "/confirm_unmap",
+            "/confirm_scope",
+            "/confirm_group_assign",
+            "/confirm_group_unassign",
+            "/confirm_group_remove"
+        ];
+
+        if (allowedConfirmations.includes(input)) {
             return next();
         }
 
@@ -165,8 +211,32 @@ bot.on("text", async (ctx, next) => {
         }
 
         await ctx.reply(
-            "❓ Gunakan /confirm_map, /confirm_map_sensor, atau /confirm_unmap " +
-            "untuk mengonfirmasi, atau /cancel untuk membatalkan."
+            "❓ Gunakan perintah konfirmasi yang sesuai, atau /cancel untuk membatalkan."
+        );
+
+        return;
+    }
+
+    if (
+        userId &&
+        hasActiveGroupSession(userId)
+    ) {
+
+        const input =
+            (ctx.message.text || "").trim().toLowerCase();
+
+        const groupConfirmations = [
+            "/confirm_group_assign",
+            "/confirm_group_unassign",
+            "/confirm_group_remove"
+        ];
+
+        if (groupConfirmations.includes(input) || input === "/cancel") {
+            return next();
+        }
+
+        await ctx.reply(
+            "❓ Gunakan perintah konfirmasi grup yang sesuai, atau /cancel untuk membatalkan."
         );
 
         return;
@@ -205,25 +275,27 @@ bot.on("text", async (ctx) => {
 // ERROR HANDLER
 // ============================================================
 
-bot.catch((error, ctx) => {
+bot.catch(async (error, ctx) => {
 
     console.error("");
-    console.error(
-        "========== TELEGRAM ERROR =========="
-    );
-
+    console.error("========== TELEGRAM ERROR ==========");
     console.error(error);
 
     if (ctx) {
-        console.error(
-            "Update:",
-            ctx.update
-        );
+        console.error("Update:", ctx.update);
     }
 
-    console.error(
-        "===================================="
-    );
+    console.error("====================================");
+
+    try {
+        await ctx.reply(
+            "❌ INTERNAL ERROR\n\n" +
+            "Command gagal diproses.\n" +
+            "Silakan coba lagi atau hubungi administrator."
+        );
+    } catch (replyError) {
+        console.error("[ERROR HANDLER] Failed to send error reply:", replyError.message);
+    }
 });
 
 

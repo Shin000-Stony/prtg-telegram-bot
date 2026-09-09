@@ -223,6 +223,12 @@ docker compose exec prtg-bot node scripts/restore.js /backups/prtg_bot_2026-09-0
 | `/client <id>` | Detail customer |
 | `/status` | Ringkasan status monitoring |
 | `/status <id>` | Detail status monitoring customer |
+| `/status` (di group terdaftar) | Hanya customer yang di-assign ke grup |
+| `/clients` (di group terdaftar) | Hanya customer yang di-assign ke grup |
+| `/group_clients` (di group terdaftar) | Daftar customer yang di-assign ke grup |
+| `/group_alerts <client_id> on\|off` (di group terdaftar, admin only) | Toggle alert delivery per customer ke grup ini |
+
+
 | `/id` | Lihat Telegram User ID |
 | `/chatid` | Lihat Chat ID |
 
@@ -491,6 +497,78 @@ docker compose logs --tail=100 prtg-bot
 - Admin IDs harus direview secara berkala
 - Docker host access harus dibatasi
 - Backup mengandung data operasional/customer
+
+---
+
+## Telegram Group Segmentation (V8.4, V8.5, V8.6)
+
+`/status` and `/clients` (without client ID) are **context-aware**:
+
+| Command | Private admin chat | Registered Telegram group | Unregistered Telegram group |
+|---------|-------------------|--------------------------|----------------------------|
+| `/status` | Global monitoring view — all customers | Only customers assigned to that group with `can_view = 1` | Denied — no customer data shown |
+| `/clients` | Global client list — all customers | Only assigned customers with `can_view = 1` | Denied — no customer data shown |
+
+Group assignment is a **presentation filter only**. The monitoring engine, alert routing, and data store remain global.
+
+### Group `/status` Output
+
+In a registered group, `/status` shows:
+
+```text
+📊 MONITORING STATUS
+
+Telegram Group
+NOC MOROWALI
+
+━━━━━━━━━━━━━━━━━━
+
+#2 SINAR TERANG MANDIRI
+🟢 UP • 📡 PRTG
+
+#4 AQUILA COBALT NICKEL
+⏸ PAUSED • 📡 PRTG
+
+━━━━━━━━━━━━━━━━━━
+
+📈 SUMMARY
+
+🟢 UP         : 2
+🔴 DOWN       : 0
+...
+Assigned      : 4
+
+🕒 09 Sep 2026 • 13:20 WITA
+```
+
+### Critical Security Rule
+
+Unregistered groups receive **zero customer data** — the bot replies with "GROUP NOT REGISTERED" and never falls back to global status.
+
+### Operator Workflow
+
+1. Add bot to Telegram group as admin.
+2. Admin runs `/register_group` in the group.
+3. Admin assigns clients: `/assign_group <client_id>`.
+4. Admin configures alert delivery per customer: `/group_alerts <client_id> on` (or `off`).
+5. Admin verifies: `/group_clients`.
+6. Anyone in the group runs `/status` or `/clients` → only assigned customers are shown.
+
+### Group Alert Routing (V8.6)
+
+When a customer transitions DOWN or RECOVERED, the bot sends alerts to all assigned Telegram groups where `receive_alerts = 1` (plus the existing global admin recipient). This is independent of `can_view` — `can_view` controls command visibility, `receive_alerts` controls alert delivery.
+
+Toggling alert delivery to a group:
+```
+/group_alerts <client_id> on
+/group_alerts <client_id> off
+```
+
+In `/group_clients`, each customer shows:
+```
+🔔 Alerts: ON   (receive_alerts = 1)
+🔕 Alerts: OFF (receive_alerts = 0)
+```
 
 ---
 

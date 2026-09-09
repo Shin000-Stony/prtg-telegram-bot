@@ -28,6 +28,65 @@ Menampilkan ringkasan status semua customer.
 
 Menampilkan detail status customer nomor 11.
 
+### Melihat Status di Telegram Group
+
+Di dalam Telegram group yang terdaftar, `/status` hanya menampilkan customer yang di-assign ke grup tersebut:
+
+```
+/status
+```
+
+- Jika group belum terdaftar → bot menampilkan "GROUP NOT REGISTERED" dan tidak menampilkan data customer.
+- Jika group terdaftar tapi belum ada customer yang di-assign → bot menampilkan "NO CUSTOMERS ASSIGNED".
+- Jika group terdaftar dan ada customer → hanya customer dengan `can_view = 1` yang ditampilkan.
+
+Di private chat (admin pribadi), `/status` tetap menampilkan **global** status semua customer — group assignment tidak memengaruhi private view.
+
+### Mengatur Alert Routing ke Grup
+
+Setiap customer yang di-assign ke sebuah grup memiliki dua flag independen:
+
+| Flag | Kontrol | Deskripsi |
+|------|---------|-----------|
+| `can_view` | `/assign_group`, `/unassign_group` | Kontrol visibilitas customer di grup (`/status`, `/clients`) |
+| `receive_alerts` | **`/group_alerts <id> on\|off`** | Kontrol delivery alert DOWN/RECOVERY ke grup ini |
+
+Secara default, customer yang di-assign memiliki `can_view = 1` dan `receive_alerts = 1` — artinya grup akan menerima alert otomatis. Untuk menghentikan alert delivery sambil tetap menampilkan customer di `/status`:
+
+```
+/group_alerts <client_id> off
+```
+
+Untuk mengaktifkan kembali:
+```
+/group_alerts <client_id> on
+```
+
+Konfirmasi perubahan akan menampilkan status Visibility dan Alert Delivery:
+
+```
+✅ ALERT ROUTING UPDATED
+
+#11 HENGJAYA MINERALINDO
+
+Telegram Group
+NOC Tambang
+
+━━━━━━━━━━━━━━━━━━━━
+
+Visibility
+✅ ENABLED
+
+Alert Delivery
+❌ DISABLED
+```
+
+Di `/group_clients`, setiap customer menampilkan status alert:
+```
+🔔 Alerts: ON    (receive_alerts = 1)
+🔕 Alerts: OFF  (receive_alerts = 0)
+```
+
 ### Melihat Daftar Customer
 
 ```
@@ -35,6 +94,18 @@ Menampilkan detail status customer nomor 11.
 ```
 
 Menampilkan daftar semua customer terdaftar.
+
+Di dalam Telegram group yang terdaftar, `/clients` hanya menampilkan customer yang di-assign ke grup tersebut (dengan `can_view = 1`):
+
+```
+/clients
+```
+
+- Jika group belum terdaftar → bot menampilkan "⛔ GROUP NOT REGISTERED" dan tidak menampilkan data customer.
+- Jika group terdaftar tapi belum ada customer yang di-assign → bot menampilkan "ℹ️ NO CUSTOMERS ASSIGNED".
+- Jika group terdaftar dan ada customer → hanya customer dengan `can_view = 1` yang ditampilkan.
+
+Di private chat (admin pribadi), `/clients` tetap menampilkan **global** daftar semua customer — group assignment tidak memengaruhi private view.
 
 ### Melihat Detail Customer
 

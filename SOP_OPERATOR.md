@@ -199,3 +199,77 @@ Backups are pruned to the most recent 7 files automatically.
 | Missing customer | Verify `/clients` and database integrity |
 
 Do not restart the bot for a single false alert. Check the monitoring logs first.
+
+---
+
+## 14. Telegram Group Operations
+
+### Registering a Group
+
+1. Add the bot to the Telegram group as admin.
+2. An admin runs:
+   ```
+   /register_group
+   ```
+3. Bot replies "GROUP REGISTERED" with the Chat ID.
+
+### Assigning Customers to a Group
+
+1. In the group, an admin runs:
+   ```
+   /assign_group <client_id>
+   ```
+2. Bot shows a confirmation card with `/confirm_group_assign`.
+3. Confirm with `/confirm_group_assign`.
+
+### Configuring Alert Delivery to a Group
+
+By default, newly assigned customers receive alerts (`receive_alerts = 1`). To stop alert delivery while keeping the customer visible in `/status` and `/clients`:
+
+```
+/group_alerts <client_id> off
+```
+
+To re-enable:
+```
+/group_alerts <client_id> on
+```
+
+Only group admins can use this command. Bot confirms with an alert routing card showing both Visibility and Alert Delivery status.
+
+### Viewing Group-Scoped Status and Client List
+
+In any registered Telegram group:
+
+```
+/status
+```
+
+- Only assigned customers (with `can_view = 1`) are displayed.
+- Unregistered groups receive "GROUP NOT REGISTERED" — no customer data is shown.
+- Empty groups receive "NO CUSTOMERS ASSIGNED".
+- Private admin `/status` always shows the global view.
+
+```
+/clients
+```
+
+- Shows a client list of only assigned customers (with `can_view = 1`) in the group.
+- Unregistered groups receive "⛔ GROUP NOT REGISTERED" — no customer data is shown.
+- Private admin `/clients` always shows the global list of all customers.
+
+### Listing Group Customers
+
+```
+/group_clients
+```
+
+Shows all customers assigned to the current group with their classification and alert status. Each customer displays `🔔 Alerts: ON` or `🔕 Alerts: OFF`. Only customers with `can_view = 1` are displayed.
+
+### Removing a Group
+
+```
+/unregister_group
+```
+
+Removes the group and all its customer assignments. Global monitoring is unaffected.

@@ -5,6 +5,10 @@ const {
     CLASSIFICATIONS
 } = require("../monitoring/classifier");
 
+const {
+    getAlertRecipientsForCustomer
+} = require("../database/telegram-groups");
+
 // ============================================================
 // NOTIFIER
 // ============================================================
@@ -358,7 +362,67 @@ function classificationDisplay(category) {
 }
 
 // ============================================================
-// SEND ALERT
+// RESOLVE ALERT RECIPIENTS
+// ============================================================
+
+function resolveAlertRecipients(customerId) {
+
+    const seen = new Set();
+    const recipients = [];
+
+    if (config.telegram.chatId) {
+        const chatId = String(config.telegram.chatId);
+        if (!seen.has(chatId)) {
+            seen.add(chatId);
+            recipients.push(config.telegram.chatId);
+        }
+    }
+
+    const groupRecipients = getAlertRecipientsForCustomer(customerId);
+
+    for (const r of groupRecipients) {
+        const chatId = String(r.chat_id);
+        if (!seen.has(chatId)) {
+            seen.add(chatId);
+            recipients.push(r.chat_id);
+        }
+    }
+
+    return recipients;
+}
+
+// ============================================================
+// SEND ALERT TO RECIPIENTS (deduplicated, isolated)
+// ============================================================
+
+async function sendAlertToRecipients(bot, message, recipients) {
+
+    const sent = [];
+    const failed = [];
+
+    for (const chatId of recipients) {
+
+        try {
+
+            await bot.telegram.sendMessage(chatId, message);
+            sent.push(chatId);
+
+        } catch (error) {
+
+            console.error(
+                `[NOTIFIER] Failed to send to ${chatId}:`,
+                error.message
+            );
+
+            failed.push(chatId);
+        }
+    }
+
+    return { sent, failed };
+}
+
+// ============================================================
+// SEND ALERT (legacy single-recipient)
 // ============================================================
 
 async function sendAlert(bot, message) {
@@ -392,7 +456,7 @@ async function sendAlert(bot, message) {
 // NOTIFY DOWN
 // ============================================================
 
-async function notifyDown(bot, customer, sensor, lastValue, backend = "prtg", extra = {}) {
+async function notifyDown(bot, customer, customerId, sensor, lastValue, backend = "prtg", extra = {}) {
 
     const detectedAt = new Date().toISOString();
 
@@ -410,14 +474,25 @@ async function notifyDown(bot, customer, sensor, lastValue, backend = "prtg", ex
         confirmThreshold: extra.confirmThreshold || 2
     });
 
-    return sendAlert(bot, message);
+    if (!message || message === "") {
+        return { sent: [], failed: [] };
+    }
+
+    const recipients = resolveAlertRecipients(customerId);
+
+    console.log(
+        `[NOTIFIER] Customer #${customer.client_id || customerId} DOWN -> ` +
+        `${recipients.length} recipient(s)`
+    );
+
+    return sendAlertToRecipients(bot, message, recipients);
 }
 
 // ============================================================
 // NOTIFY RECOVERY
 // ============================================================
 
-async function notifyRecovery(bot, customer, sensor, lastValue, backend = "prtg", extra = {}) {
+async function notifyRecovery(bot, customer, customerId, sensor, lastValue, backend = "prtg", extra = {}) {
 
     const recoveredAt = new Date().toISOString();
 
@@ -434,7 +509,18 @@ async function notifyRecovery(bot, customer, sensor, lastValue, backend = "prtg"
         backend
     });
 
-    return sendAlert(bot, message);
+    if (!message || message === "") {
+        return { sent: [], failed: [] };
+    }
+
+    const recipients = resolveAlertRecipients(customerId);
+
+    console.log(
+        `[NOTIFIER] Customer #${customer.client_id || customerId} RECOVERED -> ` +
+        `${recipients.length} recipient(s)`
+    );
+
+    return sendAlertToRecipients(bot, message, recipients);
 }
 
 // ============================================================
@@ -484,6 +570,8 @@ module.exports = {
     formatUnusualAlert,
     formatUnknownAlert,
     sendAlert,
+    resolveAlertRecipients,
+    sendAlertToRecipients,
     notifyDown,
     notifyRecovery,
     notifyTestAlert,
