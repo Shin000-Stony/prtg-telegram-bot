@@ -1168,13 +1168,20 @@ module.exports = {
     formatCustomerIdentity,
     formatCustomerIdentityCompact,
 
+    formatClientListItem,
+
+    successMessage,
+    errorMessage,
+    warningMessage,
+    accessDeniedMessage,
+    infoMessage,
+    confirmationMessage,
+
     renderStatusSummary,
     renderCustomerStatus,
     renderClientDetail,
 
     renderMappingSummary,
     renderMappingDetail,
-    renderHealthSummary,
-
-    formatClientListItem
+    renderHealthSummary
 };
