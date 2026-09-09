@@ -12,6 +12,7 @@ const {
 
 const {
     backendLabel,
+    backendShort,
     getExpectedBackend,
     getMonitoringBackendFromState,
     getAlertingStatus
@@ -1149,7 +1150,442 @@ function renderHealthSummary(summary, heartbeat) {
 }
 
 // ============================================================
+// GROUP: STATUS (V8.4)
+// ============================================================
+
+function renderGroupStatus({ group, customers, classifications, summary }) {
+
+    const lines = [];
+
+    lines.push("📊 MONITORING STATUS");
+    lines.push("");
+
+    lines.push("Telegram Group");
+    lines.push(group.name || "Unknown");
+
+    lines.push("");
+    lines.push(SEP);
+    lines.push("");
+
+    if (customers.length === 0) {
+
+        lines.push("ℹ️ NO CUSTOMERS ASSIGNED");
+        lines.push("");
+        lines.push("Belum ada client monitoring");
+        lines.push("yang di-assign ke group ini.");
+        lines.push("");
+        lines.push("Gunakan:");
+        lines.push("/assign_group <client_id>");
+
+        return lines.join("\n");
+    }
+
+    for (const item of customers) {
+
+        const classification = classifications.get(item.customerId);
+
+        if (!classification) {
+            lines.push(`#${item.clientId} ${item.name}`);
+            lines.push("❓ UNKNOWN");
+            lines.push("");
+            continue;
+        }
+
+        const cat = classification.category;
+
+        lines.push(`#${item.clientId} ${item.name}`);
+
+        if (classification.active) {
+
+            const stateDisplay = formatStateDisplay(classification.state);
+            const backend = backendShort(classification.backend);
+            lines.push(`${stateDisplay} • ${backend}`);
+
+        } else if (cat === CLASSIFICATIONS.PAUSED_PRTG) {
+
+            lines.push("⏸ PAUSED • 📡 PRTG");
+
+        } else if (cat === CLASSIFICATIONS.UNRESOLVED_PRTG) {
+
+            lines.push("🧩 UNRESOLVED • 📡 PRTG");
+
+        } else if (cat === CLASSIFICATIONS.PIC_MANAGED) {
+
+            const desc = item.description ||
+                (item.serviceId ? `Service ${item.serviceId}` : "");
+
+            if (desc) {
+                lines.push(`👤 PIC MANAGED • ${desc}`);
+            } else {
+                lines.push("👤 PIC MANAGED");
+            }
+
+        } else if (cat === CLASSIFICATIONS.DISABLED) {
+
+            lines.push("🚫 DISABLED");
+
+        } else {
+
+            const icon = classificationIcon(cat);
+            lines.push(`${icon} ${classificationLabel(cat)}`);
+        }
+
+        lines.push("");
+    }
+
+    while (lines[lines.length - 1] === "") {
+        lines.pop();
+    }
+
+    lines.push("");
+    lines.push(SEP);
+    lines.push("");
+
+    lines.push("📈 SUMMARY");
+    lines.push("");
+    lines.push("🟢 UP         : " + String(summary.active.up));
+    lines.push("🔴 DOWN       : " + String(summary.active.down));
+    lines.push("🟡 WARNING    : " + String(summary.active.warning));
+    lines.push("🟠 UNUSUAL    : " + String(summary.active.unusual));
+    lines.push("⚪ UNKNOWN     : " + String(summary.active.unknown));
+    lines.push("");
+    lines.push("⏸ Paused     : " + String(summary.pausedOnly));
+    lines.push("🧩 Unresolved : " + String(summary.unresolvedPrtg));
+    lines.push("👤 PIC Managed: " + String(summary.picManaged));
+    lines.push("🚫 Disabled   : " + String(summary.disabled));
+    lines.push("");
+    lines.push("Assigned      : " + String(summary.totalCustomers));
+
+    const now = new Date().toISOString();
+    const timestamp = formatDateTime(now);
+
+    lines.push("");
+    lines.push(SEP);
+    lines.push("");
+    lines.push(`🕒 ${timestamp}`);
+
+    return lines.join("\n");
+}
+
+// ============================================================
+// GROUP: CLIENT LIST (V8.5)
+// ============================================================
+
+function renderGroupClientList({ group, customers, classifications, stateByCustomer }) {
+
+    const lines = [
+        "👥 CLIENT LIST",
+        "",
+        "Telegram Group",
+        group.name || "Unknown",
+        "",
+        SEP,
+        ""
+    ];
+
+    if (customers.length === 0) {
+
+        lines.push("ℹ️ NO CUSTOMERS ASSIGNED");
+        lines.push("");
+        lines.push("Belum ada client monitoring");
+        lines.push("yang di-assign ke group ini.");
+        lines.push("");
+        lines.push("Gunakan:");
+        lines.push("/assign_group <client_id>");
+
+        return lines.join("\n");
+    }
+
+    customers.forEach((item, index) => {
+
+        const classification = classifications.get(item.customerId);
+        const state = stateByCustomer[item.customerId] || null;
+
+        const listItem = formatClientListItem(item, classification, state);
+
+        lines.push(listItem);
+        lines.push("");
+    });
+
+    while (lines[lines.length - 1] === "") {
+        lines.pop();
+    }
+
+    lines.push("");
+    lines.push(SEP);
+    lines.push("");
+    lines.push("Assigned: " + String(customers.length));
+
+    const now = new Date().toISOString();
+    const timestamp = formatDateTime(now);
+
+    lines.push("");
+    lines.push(SEP);
+    lines.push("");
+    lines.push(`🕒 ${timestamp}`);
+
+    return lines.join("\n");
+}
+
+// ============================================================
 // EXPORT
+// ============================================================
+
+// ============================================================
+// GROUP: REGISTERED
+// ============================================================
+
+function renderGroupRegistered(group) {
+
+    const lines = [];
+
+    lines.push("✅ GROUP REGISTERED");
+    lines.push("");
+    lines.push(group.name);
+    lines.push("");
+    lines.push(SEP);
+    lines.push("");
+    lines.push("Chat ID");
+    lines.push(String(group.chat_id));
+    lines.push("");
+    lines.push("Monitoring Access");
+    lines.push(group.enabled ? "✅ ENABLED" : "⛔ DISABLED");
+    lines.push("");
+    lines.push("Alert Routing");
+    lines.push("Ready for customer assignment.");
+
+    return lines.join("\n");
+}
+
+function renderGroupAlreadyRegistered(group) {
+
+    return infoMessage(
+        "GROUP ALREADY REGISTERED",
+        group.name + "\n\nNo changes were made."
+    );
+}
+
+// ============================================================
+// GROUP: LIST
+// ============================================================
+
+function renderGroupList(groups) {
+
+    const lines = [
+        "👥 TELEGRAM GROUPS",
+        ""
+    ];
+
+    for (const g of groups) {
+        const icon = g.enabled ? "✅" : "⛔";
+        lines.push(icon + " " + g.name);
+        lines.push("Chat ID: " + String(g.chat_id));
+        lines.push("Customers: " + (g.customer_count || 0));
+        lines.push("");
+    }
+
+    lines.push(SEP);
+    lines.push("");
+
+    lines.push("Total Groups: " + groups.filter(g => g.enabled).length);
+
+    return lines.join("\n");
+}
+
+// ============================================================
+// GROUP: ID INFO
+// ============================================================
+
+function renderGroupInfo(group) {
+
+    const lines = [
+        "ℹ️ TELEGRAM GROUP",
+        "",
+        "Name",
+        group.name,
+        "",
+        "Chat ID",
+        String(group.chat_id),
+        ""
+    ];
+
+    return lines.join("\n");
+}
+
+// ============================================================
+// GROUP: CLIENT LIST
+// ============================================================
+
+function renderGroupClients(group, groupCustomers, customerClassifications) {
+
+    const lines = [
+        "👥 GROUP CUSTOMERS",
+        "",
+        "Group",
+        group.name,
+        "",
+        SEP,
+        ""
+    ];
+
+    for (const c of groupCustomers) {
+        const classification = customerClassifications.get(c.id);
+        const icon = classification
+            ? classificationIcon(classification.category)
+            : "❓";
+        const name = c.name;
+        let subLine = "";
+
+        if (classification) {
+            const cat = classification.category;
+            if (cat === CLASSIFICATIONS.ACTIVE_PRTG || cat === CLASSIFICATIONS.ACTIVE_ICMP) {
+                subLine = formatStateDisplay(classification.state || null);
+            } else {
+                subLine = classificationLabel(cat);
+            }
+        }
+
+        lines.push("#" + c.client_id + " " + name);
+        lines.push(icon + " " + subLine);
+
+        if (c.receive_alerts === 0) {
+            lines.push("🔕 Alerts: OFF");
+        } else {
+            lines.push("🔔 Alerts: ON");
+        }
+
+        lines.push("");
+    }
+
+    lines.push(SEP);
+    lines.push("");
+    lines.push("Assigned: " + groupCustomers.length);
+
+    return lines.join("\n");
+}
+
+// ============================================================
+// GROUP: ALERT TOGGLE RESULT (V8.6)
+// ============================================================
+
+function renderGroupAlertToggle({ group, customer, canView, receiveAlerts }) {
+
+    return successMessage(
+        "ALERT ROUTING UPDATED",
+        [
+            "#" + customer.client_id + " " + customer.name,
+            "",
+            "Telegram Group",
+            group.name,
+            "",
+            SEP,
+            "",
+            "Visibility",
+            canView ? "✅ ENABLED" : "❌ DISABLED",
+            "",
+            "Alert Delivery",
+            receiveAlerts ? "✅ ENABLED" : "❌ DISABLED"
+        ]
+    );
+}
+
+// ============================================================
+// GROUP: ASSIGNMENT CONFIRMATION
+// ============================================================
+
+function renderGroupAssignmentConfirmation(group, customer, currentScopeLabel) {
+
+    const identity = [
+        "Group",
+        group.name,
+        "",
+        "Customer",
+        "#" + customer.client_id + " " + customer.name
+    ];
+
+    const bodyLines = [
+        "Visibility",
+        "✅ ENABLED",
+        "",
+        "Alert Delivery",
+        "✅ ENABLED"
+    ];
+
+    return confirmationMessage(
+        "CONFIRM GROUP ASSIGNMENT",
+        identity,
+        bodyLines,
+        "/confirm_group_assign",
+        "/cancel"
+    );
+}
+
+// ============================================================
+// GROUP: UNASSIGN CONFIRMATION
+// ============================================================
+
+function renderGroupUnassignConfirmation(group, customer) {
+
+    const identity = [
+        "Customer",
+        "#" + customer.client_id + " " + customer.name,
+        "",
+        "Telegram Group",
+        group.name
+    ];
+
+    const bodyLines = [
+        "Effect",
+        "• Customer disappears from this group view",
+        "• Alerts stop for this group",
+        "• Global monitoring continues"
+    ];
+
+    return confirmationMessage(
+        "CONFIRM GROUP UNASSIGN",
+        identity,
+        bodyLines,
+        "/confirm_group_unassign",
+        "/cancel"
+    );
+}
+
+// ============================================================
+// GROUP: REMOVE CONFIRMATION
+// ============================================================
+
+function renderGroupRemoveConfirmation(group, customerCount) {
+
+    const identity = [
+        "Telegram Group",
+        group.name,
+        "",
+        "Chat ID",
+        String(group.chat_id)
+    ];
+
+    const bodyLines = [
+        "Effect",
+        "• Group monitoring access will be removed",
+        "• Customer assignments for this group will be removed",
+        "• Group alerts will stop",
+        "• Customer monitoring continues globally"
+    ];
+
+    if (customerCount > 0) {
+        bodyLines.push("");
+        bodyLines.push(customerCount + " customer(s) will be unassigned.");
+    }
+
+    return confirmationMessage(
+        "CONFIRM GROUP REMOVAL",
+        identity,
+        bodyLines,
+        "/confirm_group_remove",
+        "/cancel"
+    );
+}
+
 // ============================================================
 
 module.exports = {
@@ -1183,5 +1619,17 @@ module.exports = {
 
     renderMappingSummary,
     renderMappingDetail,
-    renderHealthSummary
+    renderHealthSummary,
+
+    renderGroupRegistered,
+    renderGroupAlreadyRegistered,
+    renderGroupList,
+    renderGroupInfo,
+    renderGroupClients,
+    renderGroupAssignmentConfirmation,
+    renderGroupUnassignConfirmation,
+    renderGroupRemoveConfirmation,
+    renderGroupStatus,
+    renderGroupClientList,
+    renderGroupAlertToggle
 };

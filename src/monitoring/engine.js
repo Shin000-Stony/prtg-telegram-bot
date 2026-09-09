@@ -68,35 +68,37 @@ async function sendAlertIfNeeded(bot, event, target, sensorOrResult) {
         return;
     }
 
-    if (!config.telegram.chatId) {
-        console.log("[NOTIFIER] TELEGRAM_CHAT_ID not configured; notification skipped.");
-        return;
-    }
-
     try {
 
         if (event === "DOWN") {
+
             await notifyDown(
                 bot,
                 {
                     name: target.name,
                     location: target.location,
                     description: target.description,
-                    ip: target.ip
+                    ip: target.ip,
+                    client_id: target.clientId
                 },
+                target.customerId,
                 sensorOrResult.name || "Direct Ping",
                 sensorOrResult.lastvalue || sensorOrResult.error || "timeout",
                 sensorOrResult.backend || "prtg"
             );
+
         } else if (event === "RECOVERY") {
+
             await notifyRecovery(
                 bot,
                 {
                     name: target.name,
                     location: target.location,
                     description: target.description,
-                    ip: target.ip
+                    ip: target.ip,
+                    client_id: target.clientId
                 },
+                target.customerId,
                 sensorOrResult.name || "Direct Ping",
                 sensorOrResult.lastvalue || sensorOrResult.error || "timeout",
                 sensorOrResult.backend || "prtg"

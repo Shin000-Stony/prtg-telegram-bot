@@ -48,6 +48,12 @@ const customers = require("../database/customers");
 const { getInventorySummary } = require("../prtg/inventory");
 const { loadAllStates } = require("../monitoring/state-store");
 
+const {
+    isPrivateChat,
+    isGroupChat,
+    getRegisteredGroup
+} = require("./group-context");
+
 const LEGACY_WARNING_MARKERS = [
     "OLD",
     "LEGACY",
@@ -867,6 +873,9 @@ function registerCommands(bot) {
         console.log("[CMD] /help");
 
         const admin = isAdmin(ctx.from?.id);
+        const isGroup = isGroupChat(ctx);
+        const group = isGroup ? getRegisteredGroup(ctx) : null;
+        const isRegisteredGroup = Boolean(group && group.enabled);
 
         const SEP = "━━━━━━━━━━━━━━━━━━━━";
 
@@ -882,41 +891,49 @@ function registerCommands(bot) {
 
             "👥 CUSTOMER\n\n" +
             "/clients\n" +
-            "/client <id>\n" +
-            "/add_client\n" +
-            "/remove_client <id>\n" +
-            "/enable_client <id>\n" +
-            "/disable_client <id>\n\n" +
+            "/client <id>\n\n";
 
-            "🗺 PRTG MAPPING\n\n" +
-            "/mapping\n" +
-            "/mapping <id>\n" +
-            "/find_prtg <query>\n" +
-            "/find_prtg_deep <query>\n" +
-            "/find_prtg_sensor <query>\n" +
-            "/prtg_device <objid>\n" +
-            "/prtg_sensor <objid>\n\n" +
-            "/map_client <id> <objid>\n" +
-            "/map_sensor <id> <objid>\n" +
-            "/unmap_client <id>\n\n" +
+        if (isRegisteredGroup) {
+            message += "/group_clients\n";
+            message += "/group_id\n\n";
+        } else if (isGroup && !group) {
+            message += "/group_id\n\n";
+        }
 
-            "🧭 SCOPE\n\n" +
-            "/set_scope <id> <scope>\n\n" +
+        if (admin) {
+            message +=
+                "🗺 PRTG MAPPING\n\n" +
+                "/mapping\n" +
+                "/mapping <id>\n" +
+                "/find_prtg <query>\n" +
+                "/find_prtg_deep <query>\n" +
+                "/find_prtg_sensor <query>\n" +
+                "/prtg_device <objid>\n" +
+                "/prtg_sensor <objid>\n\n" +
+                "/map_client <id> <objid>\n" +
+                "/map_sensor <id> <objid>\n" +
+                "/unmap_client <id>\n\n" +
+                "🧭 SCOPE\n\n" +
+                "/set_scope <id> <scope>\n\n" +
+                "👤 CUSTOMER\n\n" +
+                "/add_client\n" +
+                "/remove_client <id>\n" +
+                "/enable_client <id>\n" +
+                "/disable_client <id>\n\n" +
+                "👥 GROUPS\n\n" +
+                "/register_group\n" +
+                "/groups\n" +
+                "/assign_group <client_id>\n" +
+                "/group_alerts <client_id> on|off\n" +
+                "/unassign_group <client_id>\n" +
+                "/unregister_group\n\n";
+        }
 
+        message +=
             "ℹ️ UTILITY\n\n" +
             "/id\n" +
             "/chatid\n" +
             "/cancel";
-
-        if (admin) {
-
-            message +=
-                "\n\n" +
-                SEP + "\n\n" +
-                "🔐 ADMIN\n\n" +
-                "/admin_test\n" +
-                "/test_alert";
-        }
 
         await ctx.reply(message);
     });

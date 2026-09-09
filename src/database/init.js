@@ -482,8 +482,7 @@ function initializeDatabase() {
     // --------------------------------------------------------
 
     db.exec(`
-        CREATE TABLE IF NOT EXISTS
-        monitoring_heartbeat (
+        CREATE TABLE IF NOT EXISTS monitoring_heartbeat (
             id INTEGER PRIMARY KEY CHECK (id = 1),
 
             last_cycle_at TEXT,
@@ -504,6 +503,78 @@ function initializeDatabase() {
     db.exec(`
         INSERT OR IGNORE INTO monitoring_heartbeat (id)
         VALUES (1)
+    `);
+
+    // --------------------------------------------------------
+    // Telegram groups tables (V8)
+    // --------------------------------------------------------
+
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS
+        telegram_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            chat_id INTEGER NOT NULL,
+
+            name TEXT NOT NULL,
+
+            enabled INTEGER NOT NULL DEFAULT 1,
+
+            created_at TEXT NOT NULL
+                DEFAULT CURRENT_TIMESTAMP,
+
+            updated_at TEXT NOT NULL
+                DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+
+    db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_telegram_groups_chat_id
+        ON telegram_groups(chat_id);
+    `);
+
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS
+        customer_telegram_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            customer_id INTEGER NOT NULL,
+
+            telegram_group_id INTEGER NOT NULL,
+
+            can_view INTEGER NOT NULL DEFAULT 1,
+
+            receive_alerts INTEGER NOT NULL DEFAULT 1,
+
+            created_at TEXT NOT NULL
+                DEFAULT CURRENT_TIMESTAMP,
+
+            updated_at TEXT NOT NULL
+                DEFAULT CURRENT_TIMESTAMP,
+
+            FOREIGN KEY (customer_id)
+                REFERENCES customers(id)
+                ON DELETE CASCADE,
+
+            FOREIGN KEY (telegram_group_id)
+                REFERENCES telegram_groups(id)
+                ON DELETE CASCADE
+        );
+    `);
+
+    db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS
+        idx_ctg_customer_group
+        ON customer_telegram_groups(customer_id, telegram_group_id);
+
+        CREATE INDEX IF NOT EXISTS
+        idx_ctg_group
+        ON customer_telegram_groups(telegram_group_id);
+
+        CREATE INDEX IF NOT EXISTS
+        idx_ctg_customer
+        ON customer_telegram_groups(customer_id);
     `);
 
     console.log(

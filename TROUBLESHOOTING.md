@@ -244,12 +244,20 @@ Startup validates required variables. If any are missing, you will see:
 
 ## 10. Alert Issues
 
-### No Alerts Received
+### No Alerts Received (Global Admin)
 
 1. Run `/test_alert` to verify Telegram delivery.
 2. Check `ALERTS_ENABLED=true` in `.env`.
 3. Check `TELEGRAM_CHAT_ID` is set and correct.
 4. Check `TELEGRAM_ADMIN_IDS` includes your Telegram user ID.
+
+### No Alerts Received (Group)
+
+1. Verify the customer is assigned to the group: `/group_clients` and check `🔔 Alerts: ON`.
+2. If shows `🔕 Alerts: OFF`, enable with: `/group_alerts <client_id> on`.
+3. Verify `can_view = 1` — customers with `can_view = 0` are not alert-eligible in that group.
+4. Ensure the bot is an admin in the group with permission to send messages.
+5. Global alerts are unaffected — verify `/test_alert` works for global admin.
 
 ### False DOWN Alerts
 
@@ -286,3 +294,38 @@ Asia/Makassar
 ### Fix
 
 Ensure `TZ=Asia/Makassar` is in `.env` or in `compose.yaml` environment section.
+
+---
+
+## 12. Group /status and /clients Issues
+
+### `/status` shows no customers
+
+1. Run `/group_clients` to list assigned customers.
+2. Verify assignments exist: `/assign_group <client_id>` if empty.
+3. Ensure `can_view = 1` on the assignment (check database `customer_telegram_groups` table).
+
+### `/clients` shows no customers
+
+1. Run `/group_clients` to verify assignments.
+2. Verify the group is registered: `/group_id`.
+3. Ensure `can_view = 1` on the assignment.
+
+### `GROUP NOT REGISTERED`
+
+1. Bot must be added to the group as admin.
+2. Run `/register_group` in the group.
+
+### Wrong customer appears in group `/status` or `/clients`
+
+1. Run `/group_clients` to see current assignments.
+2. Verify the assignment table: `customer_telegram_groups`.
+3. Unassign the wrong client:
+   ```
+   /unassign_group <client_id>
+   ```
+4. If the customer was assigned but with `can_view = 0`, reassign with `/assign_group <client_id>` and confirm — new assignments default to `can_view = 1`.
+
+### Private `/status` or `/clients` missing customers
+
+This is a regression. Private admin views must always show the **global** view (all 23 customers). If it appears filtered, check that the handler is correctly distinguishing private vs group context via `isPrivateChat(ctx)`.

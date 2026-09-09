@@ -33,7 +33,18 @@ const requiredFunctions = [
     "renderClientDetail",
     "renderMappingSummary",
     "renderMappingDetail",
-    "renderHealthSummary"
+    "renderHealthSummary",
+    "renderGroupRegistered",
+    "renderGroupAlreadyRegistered",
+    "renderGroupList",
+    "renderGroupInfo",
+    "renderGroupClients",
+    "renderGroupAssignmentConfirmation",
+    "renderGroupUnassignConfirmation",
+    "renderGroupRemoveConfirmation",
+    "renderGroupStatus",
+    "renderGroupClientList",
+    "renderGroupAlertToggle"
 ];
 
 let failed = false;
