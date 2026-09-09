@@ -1,0 +1,23 @@
+{
+  "name": "prtg_telegram_bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "db:init": "node src/database/init.js",
+    "db:seed": "node src/database/seed.js",
+    "backup": "node scripts/backup.js",
+    "restore": "node scripts/restore.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.20.0",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^17.4.2",
+    "node-fetch": "^2.7.0",
+    "telegraf": "^4.16.3"
+  }
+}

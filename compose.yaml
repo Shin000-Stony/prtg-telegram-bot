@@ -1,0 +1,23 @@
+services:
+  prtg-bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+    - prtg_data:/data
+    - ./backups:/backups
+    environment:
+      - TZ=Asia/Makassar
+      - DATABASE_PATH=/data/prtg_bot.db
+      - BACKUP_DIR=/backups
+    cap_add:
+      - NET_RAW
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  prtg_data:
