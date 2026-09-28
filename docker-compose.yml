@@ -1,0 +1,25 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    user: "1000:1000"
+    container_name: prtg-telegram-bot
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    volumes:
+      - ./data:/data:Z
+
+    environment:
+      NODE_OPTIONS: "--dns-result-order=ipv4first --no-network-family-autoselection"
+      TZ: "Asia/Makassar"
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

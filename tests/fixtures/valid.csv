@@ -1,0 +1,4 @@
+client_id,name,monitor_type,ping_host
+11,HENGJAYA,prtg,
+21,CITRA CELEBAS,icmp,10.10.10.21
+22,SANATEL,icmp,10.10.10.22

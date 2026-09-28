@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment files
+.env
+.env.local
+.env.*
+
+# Database
+data/
+quarantine/
+
+# Test files and coverage
+tests/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Diagnostic scripts (not part of production image)
+check_db.*
+env_setup.*
+import_pelanggan.*
+run_migration.*
+
+# Review/audit artifacts (not part of production image)
+evidence/
+audit_*.mjs
+*v*_review_*.md
+*v*_evidence*.zip
+*v*_reproductions*.zip
+*project_head_review*.md
+*final_evidence*.zip
+*evidence_bundle*.zip
+*freeze_review*.md
+*freeze_evidence*.zip
+current_*_results.json
+old_snapshot_results.json
+evidence_audit.json
+task_v*.md
+V[0-9]_FREEZE_DECISION*.md
+*.pdf
+*.zip

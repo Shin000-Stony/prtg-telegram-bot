@@ -1,0 +1,49 @@
+{
+  "name": "prtg-telegram-bot",
+  "version": "1.0.0",
+  "description": "Professional Telegram bot for PRTG monitoring",
+  "main": "dist/app.js",
+  "scripts": {
+    "dev": "tsx watch src/app.ts",
+    "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
+    "start": "node dist/app.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "db:migrate": "tsx src/infrastructure/database/migration-runner.ts",
+    "backup": "node scripts/sqlite-backup.js",
+    "validate-backup": "node scripts/validate-db.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "prtg",
+    "monitoring"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "csv-parse": "^5.5.5",
+    "dotenv": "^18.0.4",
+    "pino": "^8.19.0",
+    "pino-pretty": "^10.3.1",
+    "telegraf": "^4.16.3",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
+    "eslint": "^8.56.0",
+    "tsc-alias": "^1.9.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.1"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

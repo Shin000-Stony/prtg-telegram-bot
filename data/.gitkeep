@@ -1,0 +1,2 @@
+# Keep this directory for SQLite database storage
+# The database file will be created at runtime
