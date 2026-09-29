@@ -127,26 +127,60 @@ docker compose logs -f bot
 |---------|-------------|---------|
 | `/help` | Show help message (context-aware) | Private, Group, Supergroup |
 | `/chatid` | Show current chat ID and type | Private, Group, Supergroup |
-| `/clients` | List visible customers | Admin/Global: all; Group: assigned only |
+| `/clients` | List visible customers (8 per page) | Admin/Global: all; Group: assigned only |
+| `/clients <keyword>` | Search by name or client ID | Admin/Global: all; Group: assigned only |
+| `/clients <page>` | Jump to page number | Same as above |
 | `/client <client_id>` | Show customer detail | Visible customers only |
 | `/add_client <id> \| <name> \| <type> \| [ping_host]` | Create customer | Admin + Private/Global Group |
 | `/enable_client <client_id>` | Enable customer | Admin + Private/Global Group |
 | `/disable_client <client_id>` | Disable customer | Admin + Private/Global Group |
+| `/delete_client <client_id>` | Delete customer permanently (with confirm flow) | Admin + Private/Global Group |
 | CSV upload | Upload CSV to import customers | Admin + Private/Global Group |
 
-### CSV Import Format
+### CSV Import Flow
 
-```csv
-client_id,name,monitor_type,ping_host
-101,Customer One,prtg,
-102,Customer Two,icmp,10.10.10.10
-```
+The CSV import uses a safe template → upload → preview → confirm workflow:
 
-- **Required headers**: `client_id`, `name`, `monitor_type`
-- **Optional header**: `ping_host` (required for `icmp` monitor type)
-- **Monitor types**: `prtg`, `icmp`, `pic`, `disabled`
-- **File size limit**: 1 MiB
-- **Import flow**: Upload → Preview (dry-run) → Confirm → Transactional import
+1. Run `/csv_upload` to receive the template file (`customer_import_template.csv`)
+2. Fill in customers (keep the header row) — save as CSV, max 1 MiB
+3. Upload the completed `.csv` back to the bot (admin in private chat or Global Group only)
+4. Review preview — dry-run shows counts, duplicates, and errors
+5. Confirm with inline keyboard (`✅ Confirm Import` / `❌ Cancel`)
+6. On confirm: transactional bulk insert into database
+
+**Cancel at any time:** the `❌ Cancel` button aborts the import without writing data.
+
+Required columns: `client_id`, `name`, `monitor_type` · Optional: `ping_host` (for `icmp`) · Allowed types: `prtg`, `icmp`, `pic`, `disabled`
+
+### Permission Context Summary
+
+| Context | Can View Customers | Can Manage (add/enable/disable/delete) | Can Import CSV | Can Manage Groups |
+|---------|-------------------|----------------------------------------|----------------|-------------------|
+| Bot Admin — Private Chat | All | Yes | Yes | No |
+| Bot Admin — Global Group | All | Yes | Yes | Yes |
+| Bot Admin — Ordinary Group | Assigned only | No (except group ops) | No | Yes (own group) |
+| Non-Admin — Global Group | All | No | No | No |
+| Non-Admin — Ordinary Group | Assigned only | No | No | No |
+
+> `can_manage_customers` = admin + (private chat OR Global Group). This governs all mutation commands.
+
+### Configuration Reference (Intervals & Timeouts)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MONITORING_ENABLED` | `false` | Enable background monitoring engine |
+| `PRTG_POLL_INTERVAL_MS` | `60000` (60s) | PRTG API poll interval |
+| `ICMP_POLL_INTERVAL_MS` | `30000` (30s) | ICMP ping poll interval |
+| `ICMP_TIMEOUT_MS` | `3000` | Per-host ICMP timeout |
+| `ICMP_CONCURRENCY` | `5` | Max parallel ICMP probes |
+| `ALERTS_ENABLED` | `false` | Enable alert routing (requires `MONITORING_ENABLED=true`) |
+| `ALERT_DISPATCH_INTERVAL_MS` | `1000` | Alert dispatch loop interval |
+| `ALERT_MAX_EVENT_AGE_MS` | `900000` (15min) | Alert event expiry |
+| `ALERT_MAX_ATTEMPTS` | `5` | Max delivery retries before failure |
+
+> **Note:** Some timeouts are hardcoded in source, not env-configurable:
+> - PRTG API request timeout: `REQUEST_TIMEOUT_MS = 20_000` (`src/integrations/prtg/prtg.transport.ts`)
+> - PRTG inventory refresh deadline: `REFRESH_DEADLINE_MS = 120_000` (`src/integrations/prtg/prtg.inventory.cache.ts`)
 
 ## Architecture Overview
 
@@ -181,11 +215,16 @@ src/
 - **V5** Status Commands
 - **V6** Monitoring Engine
 - **V7** Alert Routing
-- **V8** Production Hardening & Handover
+- **V8** Production Hardening & Handover (complete)
 
-## Warning
+### Test Suite
 
-**Monitoring features (PRTG/ICMP status checks, alerts, scheduling) are NOT implemented in V1-V3.** This release establishes the architectural foundation, customer registry, and Telegram group access control.
+- Total: **973** tests
+- Passed: **970**
+- Failed: **3** (pre-existing, unrelated to V8):
+  - `tests/integration/imports/pelanggan-import.test.ts` — 1 failure (CSV fixture encoding)
+  - `tests/integration/telegram/status/status-routing.test.ts` — 2 failures (stale DOWN data assertions)
+- Skipped: **0**
 
 ## Security
 

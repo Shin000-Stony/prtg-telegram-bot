@@ -152,6 +152,28 @@ Monitor types: `prtg`, `icmp`, `pic`, `disabled`
 /disable_client <client_id>
 ```
 
+### Delete Customer (Permanent)
+
+Admin-only (private chat or Global Group). The `/delete_client` command shows a preview of all data that will be removed and requires explicit confirmation via inline keyboard.
+
+```
+/delete_client <client_id>
+```
+
+Preview lists:
+- PRTG mapping(s)
+- Group access assignment(s)
+- Pending/sending alert(s) (cancelled)
+- Alert outbox history (CASCADE)
+- Monitoring state record
+- Customer record
+
+**Confirmation:** `✅ Yes, Delete` permanently removes the customer and all cascade data. Already-delivered Telegram messages cannot be recalled. **This action cannot be undone.**
+
+**Cancel:** `❌ Cancel` aborts the operation; no data is modified. The confirmation session expires after 10 minutes.
+
+**Transactional safety:** alert cancellation and customer deletion run in a single SQLite transaction. If any step fails, all changes are rolled back. The confirmation session is only consumed after a successful transaction.
+
 ### Register a Group
 
 In the Telegram group:
@@ -247,7 +269,7 @@ No HTTP health endpoint exists in this build — verify via container status and
 3. Verify alert subscription: `/group_alerts <client_id> on` or `/group_alerts <client_id> off` (the `on`|`off` argument changes the subscription state, not a read-only query)
 4. Check alert delivery logs for 429/401 errors
 
-**NOTE:** Live DOWN/RECOVERY delivery has NOT been verified in production. The alert routing logic (V7) is implemented but requires a live environment with active monitoring to confirm end-to-end delivery.
+**NOTE:** Live DOWN/RECOVERY delivery has been verified by the project owner in a live environment with active monitoring. See V8 Handover Status below.
 
 ### Database Issues
 
@@ -300,6 +322,8 @@ docker compose up -d --build
 - `PRTG_TLS_REJECT_UNAUTHORIZED=true` by default (strict TLS); set to `false` to accept self-signed PRTG certs
 - Container runs as UID 1000:1000 (non-root)
 - All dynamic values HTML-escaped before sending to Telegram
+- Customer deletion uses transactional SQLite with FK `ON DELETE CASCADE`; alert outbox rows are cancelled atomically before customer removal
+- `/delete_client` requires explicit admin confirmation via inline keyboard (10-minute session expiry)
 
 ## V8 Handover Status — 29 September 2026
 
@@ -314,9 +338,10 @@ Live verification confirmed by the project owner:
 Automated verification:
 - CSV template → upload → preview → confirmation was verified
   through an integration test.
-- Latest reported full-suite result: 935/940 passed.
-- Five failures in pelanggan-import and status-routing were
-  reported as matching the task baseline.
+- Latest reported full-suite result: 970/973 passed.
+- Three failures (pelanggan-import + 2 status-routing stale DOWN tests)
+  are pre-existing and unrelated to V8; confirmed matching the task
+  baseline via git stash.
 - Subsequent targeted checks are recorded in the implementation reports.
 
 Known test failures remain documented; this release is not described

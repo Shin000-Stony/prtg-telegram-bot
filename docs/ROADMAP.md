@@ -173,16 +173,27 @@
   - `scripts/validate-db.js` (integrity + full schema validation, migrations 1–5)
   - `scripts/backup-db.sh` (consistent backup, safe atomic restore, fail-closed Docker)
 - [x] Runbook documentation (`docs/RUNBOOK.md`)
-- [ ] Comprehensive integration tests
+- [x] Comprehensive integration tests (callback routing, status routing, CSV e2e, PRTG transport pagination)
 - [ ] Load testing (simulated)
-- [ ] Configuration validation CLI
+- [x] Configuration validation (Zod schemas in `src/config/env.ts`)
 - [ ] Log rotation configuration
 - [ ] Prometheus metrics endpoint (optional)
-- [ ] Health check endpoint
+- [ ] Health check endpoint (container status + bot logs; no HTTP endpoint in this build)
 - [ ] Security audit
 - [ ] Performance benchmarks
-- [ ] Changelog
-- [ ] Version tagging strategy
+- [x] Changelog (V8 Handover Status section in `docs/RUNBOOK.md`)
+- [x] Version tagging strategy (`v8-handover-2026-09-29` tag exists)
+- [/] Structured config for intervals/timeouts (env-configurable: intervals, ICMP timeout/concurrency, alert timing — see README Configuration Reference; PRTG request timeout and refresh deadline remain hardcoded)
+
+### V8.1 — Customer Deletion Feature (Complete)
+- [x] `/delete_client <client_id>` command (admin + Private/Global Group only)
+- [x] Preview of cascading data: mappings, group access, pending alerts, outbox history, monitoring state
+- [x] Confirm/cancel inline keyboard flow (10-minute session expiry, UUID token)
+- [x] Transactional deletion (alert cancellation + customer delete in single SQLite transaction)
+- [x] FK `ON DELETE CASCADE` handles group_customer_access, prtg_mappings, monitoring_states, alert_outbox
+- [x] Already-delivered messages cannot be recalled (documented in preview)
+- [x] Owner-only confirmation (userId + chatId verification)
+- [x] Re-check authorization at confirmation time
 
 ## Timeline Estimate
 
@@ -203,7 +214,7 @@
 - [ ] Add request ID correlation for logging
 - [ ] Implement proper retry with exponential backoff
 - [ ] Add circuit breaker for PRTG API
-- [ ] Implement structured config for intervals/timeouts
+- [/] Structured config for intervals/timeouts (env-configurable: intervals, ICMP timeout/concurrency, alert timing — see README Configuration Reference; PRTG request timeout and refresh deadline remain hardcoded)
 - [ ] Add database connection pooling (if needed)
 - [ ] Consider read replicas for scaling
 - [ ] Add OpenTelemetry tracing
