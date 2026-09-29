@@ -195,6 +195,17 @@
 - [x] Owner-only confirmation (userId + chatId verification)
 - [x] Re-check authorization at confirmation time
 
+### V8.2 — Interactive Group Alerts Menu (Complete)
+- [x] `/group_alerts` with no arguments opens interactive menu (preserves `<client_id> on|off` syntax)
+- [x] Per-customer alert toggle via inline keyboard buttons
+- [x] Bulk actions: `🔔 Enable All` / `🔇 Disable All` with preview + confirm flow
+- [x] Pagination: 8 customers per page with Previous/Next navigation
+- [x] Global Group scope: shows all customers including disabled ones
+- [x] Ordinary group scope: shows only assigned customers (can_view=1 or receive_alerts=1)
+- [x] Session store: token-based, 10-minute TTL, max 200 sessions, ownership validated on each callback
+- [x] Close button dismisses menu and deletes session
+- [x] 24 unit tests covering command, toggle, pagination, bulk preview/confirm/cancel, close, authorization
+
 ## Timeline Estimate
 
 | Milestone | Est. Weeks | Dependencies |

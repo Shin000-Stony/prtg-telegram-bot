@@ -68,12 +68,17 @@ export class GroupService {
     return groupRepository.setAlertSubscription({ groupChatId, customerId, receiveAlerts });
   }
 
+  bulkSetAlertSubscription(groupChatId: string, customerIds: number[], receiveAlerts: boolean): number {
+    this.logger.info({ groupChatId, customerIds, receiveAlerts }, 'Bulk setting alert subscription');
+    return groupRepository.bulkSetAlertSubscription(groupChatId, customerIds, receiveAlerts);
+  }
+
   getAccess(groupChatId: string, customerId: number): GroupCustomerAccess | null {
     return groupRepository.getAccess(groupChatId, customerId);
   }
 
-  getGroupWithCustomerDetails(groupChatId: string): Array<{ customerId: number; clientId: string; name: string; monitorType: string; canView: boolean; receiveAlerts: boolean }> {
-    return groupRepository.getGroupWithCustomerDetails(groupChatId);
+  getGroupWithCustomerDetails(groupChatId: string, includeDisabled = false, filterCanView = false): Array<{ customerId: number; clientId: string; name: string; monitorType: string; canView: boolean; receiveAlerts: boolean; enabled: boolean }> {
+    return groupRepository.getGroupWithCustomerDetails(groupChatId, includeDisabled, filterCanView);
   }
 
   unregisterGroup(chatId: string): boolean {

@@ -25,6 +25,7 @@ import { handleCsvDocument, handleCsvConfirm, handleCsvCancel } from './integrat
 import { handleUnregisterConfirm, handleUnregisterCancel } from './integrations/telegram/handlers/unregister-group.handler';
 import { handleDeleteConfirm, handleDeleteCancel } from './integrations/telegram/handlers/delete-confirm.handler';
 import { handleMapConfirm, handleMapCancel, handleMapSearch, handleMapSelect, handleMapVerify, handleAutoMapApply, handleAutoMapCancel, handleUnmapConfirm, handleUnmapCancel, handleSearchPagination } from './integrations/telegram/handlers/mapping-callbacks';
+import { handleGroupAlertsToggle, handleGroupAlertsPage, handleGroupAlertsBulk, handleGroupAlertsBulkConfirm, handleGroupAlertsBulkCancel, handleGroupAlertsClose } from './integrations/telegram/handlers/group-alerts-callbacks';
 import { handleClientsPagination } from './integrations/telegram/commands/clients.command';
 import { setPrtgInventoryCache } from './integrations/prtg/prtg-inventory.shared';
 import { getLogger } from './core/logger';
@@ -146,6 +147,14 @@ async function main(): Promise<void> {
   bot.action(/^unmap_cancel:.+$/, handleUnmapCancel);
   bot.action(/^search_page:.+$/, handleSearchPagination);
   bot.action(/^clients_page:[^:]+:[^:]+$/i, handleClientsPagination);
+
+  // V3 Group alerts callback handlers
+  bot.action(/^alerts_toggle:[^:]+:\d+:(on|off)$/i, handleGroupAlertsToggle);
+  bot.action(/^alerts_page:[^:]+:\d+$/i, handleGroupAlertsPage);
+  bot.action(/^alerts_bulk:[^:]+:(enable_all|disable_all)$/i, handleGroupAlertsBulk);
+  bot.action(/^ga_confirm:[^:]+:[^:]+$/i, handleGroupAlertsBulkConfirm);
+  bot.action(/^ga_cancel:[^:]+:[^:]+$/i, handleGroupAlertsBulkCancel);
+  bot.action(/^alerts_close:[^:]+$/i, handleGroupAlertsClose);
 
   const monitoringConfig = createMonitoringConfig(getConfig());
 

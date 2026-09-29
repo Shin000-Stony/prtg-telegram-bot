@@ -119,7 +119,7 @@ docker compose logs -f bot
 | `/assign_client <client_id> [alerts]` | Grant group visibility (and optionally alerts) to a customer | Admin + Private/Global Group |
 | `/unassign_client <client_id>` | Revoke group access to a customer | Admin + Private/Global Group |
 | `/group_clients` | List customers visible in current group | Group members |
-| `/group_alerts` | Toggle alerts for a customer in the group | Admin + Group members |
+| `/group_alerts` | Interactive menu or toggle alerts: `/group_alerts` (menu) or `/group_alerts <client_id> on|off` | Admin + Group members |
 
 ### V2 Commands
 
@@ -216,11 +216,13 @@ src/
 - **V6** Monitoring Engine
 - **V7** Alert Routing
 - **V8** Production Hardening & Handover (complete)
+- **V8.1** Customer Deletion Feature (complete)
+- **V8.2** Interactive Group Alerts Menu (complete)
 
 ### Test Suite
 
-- Total: **973** tests
-- Passed: **970**
+- Total: **997** tests (V8.2 added 24 new tests)
+- Passed: **994**
 - Failed: **3** (pre-existing, unrelated to V8):
   - `tests/integration/imports/pelanggan-import.test.ts` — 1 failure (CSV fixture encoding)
   - `tests/integration/telegram/status/status-routing.test.ts` — 2 failures (stale DOWN data assertions)

@@ -37,7 +37,7 @@ const CATEGORY_ICON: Record<string, string> = {
   'Utilities': '🧰',
 };
 
-const SEPARATOR = '────────';
+export const SEPARATOR = '────────';
 
 export function formatChatInfo(chatId: string, chatType: string): string {
   return [
@@ -520,6 +520,87 @@ export function formatDeleteClientCancelled(): string {
 
 export function formatError(message: string): string {
   return `❌ ${message}`;
+}
+
+export function formatGroupAlertsMenuHeader(groupType: 'global' | 'ordinary', customerCount: number, page: number, totalPages: number): string {
+  const header = groupType === 'global'
+    ? '🔔 <b>GROUP ALERTS — GLOBAL GROUP</b>'
+    : '🔔 <b>GROUP ALERTS</b>';
+
+  const start = (page - 1) * 8 + 1;
+  const end = Math.min(start + customerCount - 1, customerCount);
+
+  return [
+    header,
+    '',
+    `Showing ${start}–${end} of ${customerCount} · Page ${page}/${totalPages}`,
+    '',
+  ].join('\n');
+}
+
+export function formatAlertCustomerLine(customer: { clientId: string; name: string; canView: boolean; enabled: boolean; receiveAlerts: boolean }): string {
+  const alertIcon = customer.receiveAlerts ? '🔔' : '🔕';
+  const enabledLabel = customer.enabled ? '' : ' (disabled)';
+  return `#${customer.clientId} ${customer.name}${enabledLabel}\n  ${alertIcon} Alerts: ${customer.receiveAlerts ? 'ON' : 'OFF'}`;
+}
+
+export function formatGroupAlertsEmpty(groupType: 'global' | 'ordinary'): string {
+  if (groupType === 'global') {
+    return '📋 <b>GROUP ALERTS — GLOBAL GROUP</b>\n\nNo customers found.';
+  }
+  return '📋 <b>GROUP ALERTS</b>\n\nNo customers assigned with visibility access.';
+}
+
+export function formatGroupAlertsBulkPreview(
+  action: 'enable_all' | 'disable_all',
+  affected: Array<{ clientId: string; name: string; receiveAlerts: boolean; enabled: boolean }>,
+  isGlobalGroup: boolean
+): string {
+  const verb = action === 'enable_all' ? 'ENABLE' : 'DISABLE';
+  const icon = action === 'enable_all' ? '🔔' : '🔇';
+
+  const lines = [
+    `${icon} <b>BULK ALERT ${verb} — CONFIRM</b>`,
+    '',
+    `Scope    : ${isGlobalGroup ? 'Global Group (all customers)' : 'This group (assigned customers)'}`,
+    `Affected : ${affected.length} customer(s)`,
+    '',
+  ];
+
+  if (affected.length > 0) {
+    lines.push('Preview:');
+    const preview = affected.slice(0, 10);
+    for (const c of preview) {
+      const status = c.receiveAlerts ? 'ON → OFF' : 'OFF → ON';
+      const disabled = c.enabled ? '' : ' (disabled)';
+      lines.push(`  <code>${htmlEscape(c.clientId)}</code> ${htmlEscape(c.name)}${disabled} — ${status}`);
+    }
+    if (affected.length > 10) {
+      lines.push(`  ... and ${affected.length - 10} more`);
+    }
+    lines.push('');
+  }
+
+  lines.push('This will update alert subscriptions for all listed customers.');
+  lines.push(SEPARATOR);
+
+  return lines.join('\n');
+}
+
+export function formatGroupAlertsBulkResult(action: 'enable_all' | 'disable_all', affected: number): string {
+  const verb = action === 'enable_all' ? 'enabled' : 'disabled';
+  const icon = action === 'enable_all' ? '🔔' : '🔇';
+  return `${icon} <b>BULK ALERTS ${action === 'enable_all' ? 'ENABLED' : 'DISABLED'}</b>\n\nUpdated ${affected} customer(s).`;
+}
+
+export function formatGroupAlertsToggleResult(customer: { clientId: string; name: string }, enabled: boolean): string {
+  const icon = enabled ? '🔔' : '🔕';
+  const state = enabled ? 'ON' : 'OFF';
+  return `${icon} Alerts ${state} for <code>${htmlEscape(customer.clientId)}</code> — ${htmlEscape(customer.name)}`;
+}
+
+export function formatGroupAlertsClosed(): string {
+  return '❌ Alert subscription menu closed.';
 }
 
 export function formatSuccess(message: string): string {

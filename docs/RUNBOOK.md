@@ -194,11 +194,24 @@ This grants visibility (`can_view=1`). To receive alerts, toggle explicitly:
 /group_alerts <client_id> off
 ```
 
-> Note: `/assign_client` preserves existing `receive_alerts`. Use `/group_alerts` to toggle alert subscription.
+> Note: `/assign_client` preserves existing `receive_alerts`. Use `/group_alerts` to toggle alert subscription explicitly.
+
+### Interactive Alert Subscription Menu
+
+Run `/group_alerts` (no arguments) in a group to open the interactive menu:
+
+- **Per-customer toggles:** Each customer row has an inline button to toggle alerts ON/OFF.
+- **Bulk actions:** `🔔 Enable All` / `🔇 Disable All` — shows a preview of affected customers, then requires confirmation via inline keyboard (10-minute session expiry).
+- **Pagination:** Customers are listed 8 per page with Previous/Next navigation.
+- **Close:** `❌ Close` dismisses the menu and deletes the session.
+
+**Global Group scope:** The menu shows all customers, including disabled ones. An admin can enable alerts for a disabled customer in advance; the subscription becomes active when the customer is re-enabled.
+
+**Ordinary group scope:** The menu shows only customers assigned to that group (with access rows). Only customers with `can_view=1` or `receive_alerts=1` are listed.
 
 ### Global Group
 
-The Global Group is identified by `TELEGRAM_GLOBAL_GROUP_ID` (exact chat ID match). It sees all customers automatically (no `can_view` requirement, including disabled customers). Bot admins in Global Group can toggle alerts per customer via `/group_alerts <client_id> on|off`. The Global Group **cannot** be unregistered.
+The Global Group is identified by `TELEGRAM_GLOBAL_GROUP_ID` (exact chat ID match). It sees all customers automatically (no `can_view` requirement, including disabled customers). Bot admins in Global Group can toggle alerts per customer via `/group_alerts <client_id> on|off` or use the interactive menu (`/group_alerts` with no arguments). The Global Group **cannot** be unregistered.
 
 ### Map PRTG Sensor
 
@@ -266,7 +279,7 @@ No HTTP health endpoint exists in this build — verify via container status and
 
 1. Set `ALERTS_ENABLED=true` and `MONITORING_ENABLED=true` in `.env`
 2. Verify group registered: use `/group_clients` in the group to list visible customers
-3. Verify alert subscription: `/group_alerts <client_id> on` or `/group_alerts <client_id> off` (the `on`|`off` argument changes the subscription state, not a read-only query)
+  3. Verify alert subscription: `/group_alerts <client_id> on` and `/group_alerts` (interactive menu). The `on`|`off` argument changes the subscription state, not a read-only query. The interactive menu shows current ON/OFF state for all customers in scope.
 4. Check alert delivery logs for 429/401 errors
 
 **NOTE:** Live DOWN/RECOVERY delivery has been verified by the project owner in a live environment with active monitoring. See V8 Handover Status below.
@@ -324,6 +337,7 @@ docker compose up -d --build
 - All dynamic values HTML-escaped before sending to Telegram
 - Customer deletion uses transactional SQLite with FK `ON DELETE CASCADE`; alert outbox rows are cancelled atomically before customer removal
 - `/delete_client` requires explicit admin confirmation via inline keyboard (10-minute session expiry)
+- `/group_alerts` interactive menu uses token-based sessions (10-minute TTL, max 200 sessions). Each callback re-validates userId, chatId, and admin authorization — ownership is enforced on toggle, bulk confirm, bulk cancel, and close.
 
 ## V8 Handover Status — 29 September 2026
 

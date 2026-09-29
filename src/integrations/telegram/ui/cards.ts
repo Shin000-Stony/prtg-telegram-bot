@@ -213,3 +213,124 @@ export function createClientsPaginationKeyboard(token: string, page: number, tot
 
   return { inline_keyboard: buttons };
 }
+
+export interface GroupAlertsCustomerInfo {
+  customerId: number;
+  clientId: string;
+  name: string;
+  canView: boolean;
+  enabled: boolean;
+  receiveAlerts: boolean;
+}
+
+export function createGroupAlertsKeyboard(
+  token: string,
+  customers: GroupAlertsCustomerInfo[],
+  page: number,
+  totalPages: number,
+  pageSize: number
+): InlineKeyboardMarkup {
+  const buttons: InlineKeyboardButton[][] = [];
+
+  for (const c of customers) {
+    const target = c.receiveAlerts ? 'off' : 'on';
+    const alertLabel = c.receiveAlerts ? '🔔 Alerts ON' : '🔕 Alerts OFF';
+    const disabledOverlay = c.enabled ? '' : ' (disabled)';
+    buttons.push([
+      {
+        text: `${c.clientId} - ${c.name}${disabledOverlay} | ${alertLabel}`,
+        callback_data: `alerts_toggle:${token}:${c.customerId}:${target}`,
+      },
+    ]);
+  }
+
+  const bulkRow: InlineKeyboardButton[] = [
+    { text: '🔔 Enable All', callback_data: `alerts_bulk:${token}:enable_all` },
+    { text: '🔇 Disable All', callback_data: `alerts_bulk:${token}:disable_all` },
+  ];
+  buttons.push(bulkRow);
+
+  if (totalPages > 1) {
+    const navButtons: InlineKeyboardButton[] = [];
+    if (page > 1) {
+      navButtons.push({ text: '◀ Previous', callback_data: `alerts_page:${token}:${page - 1}` });
+    }
+    if (page < totalPages) {
+      navButtons.push({ text: 'Next ▶', callback_data: `alerts_page:${token}:${page + 1}` });
+    }
+    if (navButtons.length > 0) {
+      buttons.push(navButtons);
+    }
+  }
+
+  buttons.push([{ text: '❌ Close', callback_data: `alerts_close:${token}` }]);
+
+  return { inline_keyboard: buttons };
+}
+
+export interface GroupAlertsCallbackData {
+  action: string;
+  token: string;
+  customerId?: number;
+  toggleTarget?: 'on' | 'off';
+  page?: number;
+  bulkAction?: string;
+  previewId?: string;
+}
+
+export function parseGroupAlertsCallback(data: string): GroupAlertsCallbackData | null {
+  if (Buffer.byteLength(data, 'utf8') > 64) {
+    return null;
+  }
+
+  const parts = data.split(':');
+  if (parts.length < 2) return null;
+
+  const action = parts[0];
+  const token = parts[1];
+
+  if (action === 'alerts_toggle' && parts.length === 4) {
+    const customerId = parsePositiveInteger(parts[2]);
+    if (customerId === null) return null;
+    const target = parts[3];
+    if (target !== 'on' && target !== 'off') return null;
+    return { action, token, customerId: customerId!, toggleTarget: target };
+  }
+
+  if (action === 'alerts_page' && parts.length === 3) {
+    const page = parsePositiveInteger(parts[2]);
+    if (page === null) return null;
+    return { action, token, page: page! };
+  }
+
+  if (action === 'alerts_bulk' && parts.length === 3) {
+    const bulkAction = parts[2];
+    if (bulkAction !== 'enable_all' && bulkAction !== 'disable_all') return null;
+    return { action, token, bulkAction };
+  }
+
+  if (action === 'ga_confirm' && parts.length === 3) {
+    return { action: 'ga_confirm', token, previewId: parts[2] };
+  }
+
+  if (action === 'ga_cancel' && parts.length === 3) {
+    return { action: 'ga_cancel', token, previewId: parts[2] };
+  }
+
+  if (action === 'alerts_close' && parts.length === 2) {
+    return { action: 'close', token };
+  }
+
+  return null;
+}
+
+export function createGroupAlertsBulkConfirmKeyboard(token: string, previewId: string): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: '✅ Confirm', callback_data: `ga_confirm:${token}:${previewId}` },
+        { text: '❌ Cancel', callback_data: `ga_cancel:${token}:${previewId}` },
+      ],
+    ],
+  };
+}
