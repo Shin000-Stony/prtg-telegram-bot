@@ -41,7 +41,7 @@ const manageCustomerCommands: HelpCommand[] = [
 const adminGroupCommands: HelpCommand[] = [
   { command: 'assign_client', description: 'Assign customer to group' },
   { command: 'unassign_client', description: 'Unassign customer from group' },
-  { command: 'group_alerts', description: 'Toggle alert subscription: /group_alerts <client_id> on|off' },
+  { command: 'group_alerts', description: 'Manage alert subscriptions: interactive menu or /group_alerts <client_id> on|off' },
   { command: 'unregister_group', description: 'Unregister this group' },
 ];
 

@@ -2,7 +2,16 @@ import type { BotContext } from '@/integrations/telegram/bot';
 import { groupService } from '@/modules/groups/group.service';
 import { accessService } from '@/modules/groups/access.service';
 import { customerService } from '@/modules/customers/customer.service';
-import { formatSuccess, formatError, formatAccessDenied } from '@/integrations/telegram/ui/messages';
+import { groupAlertsStore, PAGE_SIZE } from '@/modules/groups/group-alerts.store';
+import { createGroupAlertsKeyboard } from '@/integrations/telegram/ui/cards';
+import {
+  formatSuccess,
+  formatError,
+  formatAccessDenied,
+  formatGroupAlertsMenuHeader,
+  formatAlertCustomerLine,
+  formatGroupAlertsEmpty,
+} from '@/integrations/telegram/ui/messages';
 import { getLogger } from '@/core/logger';
 
 const logger = getLogger().child({ module: 'GroupAlertsCommand' });
@@ -24,12 +33,28 @@ export async function groupAlertsCommand(ctx: BotContext): Promise<void> {
     return;
   }
 
+  // Check group eligibility FIRST to avoid existence leakage
+  if (!accessService.isGlobalGroup(ctx.chatId)) {
+    if (!accessService.isGroupRegistered(ctx.chatId)) {
+      await ctx.reply(formatError('This group is not registered. Run /register_group first.'));
+      return;
+    }
+  }
+
   // Parse arguments
   if (!ctx.message || !('text' in ctx.message)) {
     return;
   }
 
   const parts = ctx.message.text.trim().split(/\s+/);
+
+  // No arguments - show interactive menu
+  if (parts.length <= 1) {
+    await showAlertsMenu(ctx);
+    return;
+  }
+
+  // Arguments provided - use existing on/off behavior
   if (parts.length < 3) {
     await ctx.reply(formatError('Usage: /group_alerts <client_id> on|off'));
     return;
@@ -44,14 +69,6 @@ export async function groupAlertsCommand(ctx: BotContext): Promise<void> {
   }
 
   const receiveAlerts = action === 'on';
-
-  // Check group eligibility FIRST to avoid existence leakage
-  if (!accessService.isGlobalGroup(ctx.chatId)) {
-    if (!accessService.isGroupRegistered(ctx.chatId)) {
-      await ctx.reply(formatError('This group is not registered. Run /register_group first.'));
-      return;
-    }
-  }
 
   // Now look up customer
   const customer = customerService.getByClientId(clientId);
@@ -89,4 +106,80 @@ export async function groupAlertsCommand(ctx: BotContext): Promise<void> {
     )
   );
   logger.info({ chatId: ctx.chatId, userId: ctx.from?.id.toString(), clientId, receiveAlerts }, 'Group alert subscription updated');
+}
+
+async function showAlertsMenu(ctx: BotContext): Promise<void> {
+  const isGlobal = accessService.isGlobalGroup(ctx.chatId!);
+
+  // For Global Group: include disabled customers
+  // For ordinary groups: only assigned customers (with access rows)
+  const customers = groupService.getGroupWithCustomerDetails(ctx.chatId!, isGlobal, !isGlobal);
+
+  const session = groupAlertsStore.create({
+    userId: ctx.from!.id.toString(),
+    chatId: ctx.chatId!,
+    messageId: null,
+    isGlobalGroup: isGlobal,
+    customers: customers.map((c) => ({
+      customerId: c.customerId,
+      clientId: c.clientId,
+      name: c.name,
+      monitorType: c.monitorType,
+      canView: c.canView,
+      enabled: c.enabled,
+      receiveAlerts: c.receiveAlerts,
+    })),
+  });
+
+  const total = session.customers.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, session.currentPage), totalPages);
+  const start = (safePage - 1) * PAGE_SIZE;
+  const pageCustomers = session.customers.slice(start, start + PAGE_SIZE);
+
+  const groupType = isGlobal ? 'global' : 'ordinary';
+
+  if (total === 0) {
+    await ctx.reply(formatGroupAlertsEmpty(groupType), { parse_mode: 'HTML' });
+    groupAlertsStore.delete(session.token);
+    return;
+  }
+
+  const header = formatGroupAlertsMenuHeader(groupType, total, safePage, totalPages);
+  const lines: string[] = [header];
+  for (let i = 0; i < pageCustomers.length; i++) {
+    if (i > 0) {
+      lines.push('');
+    }
+    lines.push(formatAlertCustomerLine(pageCustomers[i]));
+  }
+
+  const keyboard = createGroupAlertsKeyboard(
+    session.token,
+    pageCustomers.map((c) => ({
+      customerId: c.customerId,
+      clientId: c.clientId,
+      name: c.name,
+      canView: c.canView,
+      enabled: c.enabled,
+      receiveAlerts: c.receiveAlerts,
+    })),
+    safePage,
+    totalPages,
+    PAGE_SIZE
+  );
+
+  const result = await ctx.reply(lines.join('\n'), {
+    parse_mode: 'HTML',
+    reply_markup: keyboard,
+  });
+
+  const messageId = (result && typeof result === 'object' && 'message_id' in result)
+    ? (result as { message_id: number }).message_id
+    : null;
+  if (messageId) {
+    session.messageId = messageId;
+  }
+
+  logger.info({ chatId: ctx.chatId, userId: ctx.from?.id.toString(), customerCount: total, isGlobal }, 'Group alerts menu opened');
 }

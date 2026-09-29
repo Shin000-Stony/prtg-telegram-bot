@@ -1,4 +1,4 @@
-import { getDatabase } from '../../infrastructure/database/database';
+import { getDatabase, runInTransaction } from '../../infrastructure/database/database';
 import type { TelegramGroup, GroupFilters, GroupListResult, GroupCustomerAccess, AssignCustomerInput, UpdateAccessInput, SetAlertInput } from './group.types';
 import { AppError } from '../../core/errors/app-error';
 import { getLogger } from '../../core/logger';
@@ -287,20 +287,23 @@ export class GroupRepository {
     return this.getAccess(input.groupChatId, input.customerId)!;
   }
 
-  getGroupWithCustomerDetails(groupChatId: string): Array<{ customerId: number; clientId: string; name: string; monitorType: string; canView: boolean; receiveAlerts: boolean }> {
+  getGroupWithCustomerDetails(groupChatId: string, includeDisabled = false, filterCanView = false): Array<{ customerId: number; clientId: string; name: string; monitorType: string; canView: boolean; receiveAlerts: boolean; enabled: boolean }> {
     const config = getConfig();
     const isGlobalGroup = config.TELEGRAM_GLOBAL_GROUP_ID && groupChatId === config.TELEGRAM_GLOBAL_GROUP_ID;
 
     if (isGlobalGroup) {
-      // For Global Group, return all customers with default visibility=true and alert state from explicit subscriptions
-      const rows = this.getDb().prepare(`
-        SELECT c.id as customer_id, c.client_id, c.name, c.monitor_type,
-               COALESCE(gca.receive_alerts, 0) as receive_alerts
-        FROM customers c
-        LEFT JOIN group_customer_access gca ON gca.customer_id = c.id AND gca.group_chat_id = ?
-        WHERE c.enabled = 1
-        ORDER BY c.client_id
-      `).all(config.TELEGRAM_GLOBAL_GROUP_ID!) as Record<string, unknown>[];
+       // For Global Group, return all customers with default visibility=true and alert state from explicit subscriptions
+       // When includeDisabled is false, only return enabled customers (default behavior)
+       const enabledFilter = includeDisabled ? '' : 'WHERE c.enabled = 1';
+       const rows = this.getDb().prepare(`
+         SELECT c.id as customer_id, c.client_id, c.name, c.monitor_type,
+                COALESCE(c.enabled, 0) as enabled,
+                COALESCE(gca.receive_alerts, 0) as receive_alerts
+         FROM customers c
+         LEFT JOIN group_customer_access gca ON gca.customer_id = c.id AND gca.group_chat_id = ?
+         ${enabledFilter}
+         ORDER BY c.client_id
+       `).all(config.TELEGRAM_GLOBAL_GROUP_ID!) as Record<string, unknown>[];
       
       return rows.map(row => ({
         customerId: row.customer_id as number,
@@ -308,28 +311,96 @@ export class GroupRepository {
         name: row.name as string,
         monitorType: row.monitor_type as string,
         canView: true, // Global Group sees all customers
+        enabled: (row.enabled as number) === 1,
         receiveAlerts: (row.receive_alerts as number) === 1,
       }));
     }
 
-    // For ordinary groups, only return customers with explicit access rows
-    const rows = this.getDb().prepare(`
-      SELECT gca.customer_id, gca.can_view, gca.receive_alerts,
-             c.client_id, c.name, c.monitor_type
-      FROM group_customer_access gca
-      JOIN customers c ON c.id = gca.customer_id
-      WHERE gca.group_chat_id = ?
-      ORDER BY c.client_id
-    `).all(groupChatId) as Record<string, unknown>[];
+       // For ordinary groups, only return customers with explicit access rows
+       // filterCanView=true restricts to can_view=1 customers only (used by alert menu)
+       const visibilityFilter = filterCanView ? 'AND gca.can_view = 1' : '';
+       const rows = this.getDb().prepare(`
+         SELECT gca.customer_id, gca.can_view, gca.receive_alerts,
+                c.client_id, c.name, c.monitor_type, c.enabled
+       FROM group_customer_access gca
+       JOIN customers c ON c.id = gca.customer_id
+       WHERE gca.group_chat_id = ? ${visibilityFilter}
+       ORDER BY c.client_id
+     `).all(groupChatId) as Record<string, unknown>[];
     
-    return rows.map(row => ({
+         return rows.map(row => ({
       customerId: row.customer_id as number,
       clientId: row.client_id as string,
       name: row.name as string,
       monitorType: row.monitor_type as string,
       canView: (row.can_view as number) === 1,
+      enabled: (row.enabled as number) === 1,
       receiveAlerts: (row.receive_alerts as number) === 1,
     }));
+  }
+
+  bulkSetAlertSubscription(groupChatId: string, customerIds: number[], receiveAlerts: boolean): number {
+    return runInTransaction((db) => {
+      const now = new Date().toISOString();
+      const targetFlag = receiveAlerts ? 1 : 0;
+      const config = getConfig();
+      const isGlobalGroup = config.TELEGRAM_GLOBAL_GROUP_ID && groupChatId === config.TELEGRAM_GLOBAL_GROUP_ID;
+      let changed = 0;
+
+      if (isGlobalGroup) {
+        db.prepare(`
+          INSERT INTO telegram_groups (chat_id, title, enabled, registered_at)
+          VALUES (?, 'Global Group', 1, ?)
+          ON CONFLICT(chat_id) DO NOTHING
+        `).run(groupChatId, now);
+      }
+
+      const customerCheckStmt = db.prepare(
+        isGlobalGroup
+          ? 'SELECT 1 FROM customers WHERE id = ?'
+          : 'SELECT can_view FROM group_customer_access WHERE group_chat_id = ? AND customer_id = ? AND can_view = 1'
+      );
+
+      for (const customerId of customerIds) {
+        const row = isGlobalGroup
+          ? customerCheckStmt.get(customerId) as { '1': number } | undefined
+          : customerCheckStmt.get(groupChatId, customerId) as { can_view: number } | undefined;
+        if (!row) {
+          throw AppError.validation('Bulk target out of scope or missing', { groupChatId, customerId });
+        }
+      }
+
+      const selectStmt = db.prepare(
+        'SELECT receive_alerts FROM group_customer_access WHERE group_chat_id = ? AND customer_id = ?'
+      );
+      const updateStmt = db.prepare(
+        'UPDATE group_customer_access SET receive_alerts = ?, updated_at = ? WHERE group_chat_id = ? AND customer_id = ?'
+      );
+      const insertStmt = db.prepare(
+        'INSERT INTO group_customer_access (group_chat_id, customer_id, can_view, receive_alerts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+      );
+
+      for (const customerId of customerIds) {
+        const current = selectStmt.get(groupChatId, customerId) as { receive_alerts: number } | undefined;
+
+        if (!current) {
+          if (isGlobalGroup && receiveAlerts) {
+            insertStmt.run(groupChatId, customerId, 0, 1, now, now);
+            changed++;
+          }
+          continue;
+        }
+
+        if (current.receive_alerts === targetFlag) {
+          continue;
+        }
+
+        const result = updateStmt.run(targetFlag, now, groupChatId, customerId);
+        changed += result.changes;
+      }
+
+      return changed;
+    });
   }
 
   removeGroup(chatId: string): boolean {
