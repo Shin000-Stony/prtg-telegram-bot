@@ -11,7 +11,7 @@ export interface InventorySnapshot {
 
 const TTL_MS = 5 * 60_000;
 const MAX_STALE_AGE_MS = 30 * 60_000;
-const REFRESH_DEADLINE_MS = 60_000;
+const REFRESH_DEADLINE_MS = 120_000;
 
 export class PrtgInventoryCache {
   private snapshot: InventorySnapshot | null = null;
@@ -71,18 +71,30 @@ export class PrtgInventoryCache {
 
     const inFlight = this.inFlight;
     if (inFlight) {
+      this.logger.info({ detail: 'refresh_dedup', skippedNew: true }, 'PRTG refresh in-flight, returning existing promise');
       return inFlight;
     }
 
     const controller = new AbortController();
+    const refreshStart = this.clock();
+    this.logger.info({ detail: 'refresh_start', deadlineMs: REFRESH_DEADLINE_MS }, 'PRTG refresh started');
+
     const deadlineTimer = setTimeout(() => {
+      this.logger.warn({ detail: 'refresh_deadline_exceeded', elapsedMs: this.clock() - refreshStart, deadlineMs: REFRESH_DEADLINE_MS }, 'PRTG refresh deadline exceeded, aborting');
       controller.abort();
     }, REFRESH_DEADLINE_MS);
 
     const promise = this.doRefresh(controller.signal)
+      .then((snap) => {
+        const elapsed = this.clock() - refreshStart;
+        this.logger.info({ detail: 'refresh_success', elapsedMs: elapsed, sensorCount: snap.sensors.length, deviceCount: snap.devices.length }, 'PRTG refresh completed');
+        return snap;
+      })
       .catch((error) => {
+        const elapsed = this.clock() - refreshStart;
         clearTimeout(deadlineTimer);
         this.inFlight = null;
+        this.logger.warn({ detail: 'refresh_failed', elapsedMs: elapsed, err: error instanceof Error ? error.message : String(error) }, 'PRTG refresh failed');
         throw error;
       })
       .finally(() => {

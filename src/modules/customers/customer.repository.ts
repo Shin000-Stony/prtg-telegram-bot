@@ -22,6 +22,11 @@ export class CustomerRepository {
   }
   private logger = getLogger().child({ module: 'CustomerRepository' });
 
+  private escapeLike(value: string): string {
+    return value.replace(/[%_]/g, (ch) => '\\' + ch);
+  }
+
+
   create(input: CreateCustomerInput): Customer {
     const now = new Date().toISOString();
     const stmt = this.getDb().prepare(`
@@ -84,9 +89,8 @@ export class CustomerRepository {
     }
 
     if (search) {
-      conditions.push('(client_id LIKE ? OR name LIKE ?)');
-      const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm);
+      conditions.push(`(INSTR(LOWER(client_id), LOWER(?)) > 0 OR INSTR(LOWER(name), LOWER(?)) > 0)`);
+      params.push(search, search);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -97,7 +101,7 @@ export class CustomerRepository {
     const offset = (page - 1) * pageSize;
     const selectStmt = this.getDb().prepare(`
       SELECT * FROM customers ${whereClause}
-      ORDER BY name ASC
+      ORDER BY name ASC, id ASC
       LIMIT ? OFFSET ?
     `);
 
@@ -130,16 +134,15 @@ export class CustomerRepository {
     }
 
     if (search) {
-      conditions.push('(client_id LIKE ? OR name LIKE ?)');
-      const searchTerm = `%${search}%`;
-      params.push(searchTerm, searchTerm);
+      conditions.push(`(INSTR(LOWER(client_id), LOWER(?)) > 0 OR INSTR(LOWER(name), LOWER(?)) > 0)`);
+      params.push(search, search);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const selectStmt = this.getDb().prepare(`
       SELECT * FROM customers ${whereClause}
-      ORDER BY name ASC
+      ORDER BY name ASC, id ASC
     `);
 
     const rows = selectStmt.all(...params) as Record<string, unknown>[];

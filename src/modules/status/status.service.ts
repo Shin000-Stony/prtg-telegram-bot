@@ -137,6 +137,43 @@ export class StatusService {
     });
   }
 
+  getCustomerStatusesWithFilter(context: StatusContext, keyword: string | null): StatusDetail[] {
+    const ctx: AccessContext = { userId: context.userId, chatId: context.chatId, chatType: context.chatType };
+
+    const scope = accessService.getCustomerAccessScope(ctx);
+    if (scope.kind === 'none') {
+      return [];
+    }
+
+    let customers: Customer[];
+    if (scope.kind === 'all') {
+      customers = customerService.listAll({ search: keyword ?? undefined });
+    } else {
+      const ids = scope.customerIds;
+      customers = customerService.listAll({ search: keyword ?? undefined }).filter(c => ids.includes(c.id));
+    }
+
+    const { snap, quality, fetchedAt } = this.resolveSnapshot();
+
+    return customers.map((customer) => {
+      const mapping = this.mappingService.getByCustomerId(customer.id);
+      const monitoringState = customer.monitorType === 'icmp'
+        ? monitoringRepository.findById(customer.id)
+        : null;
+      return resolveStatusDetail({
+        customer,
+        sensor: mapping ? this.findSensor(snap, mapping.prtgObjectId) : null,
+        mapping,
+        dataQuality: quality,
+        fetchedAt,
+        lastKnownStatus: null,
+        monitoringState,
+        icmpFreshThresholdMs: this.icmpFreshThresholdMs,
+        icmpNow: this.clock,
+      });
+    });
+  }
+
   getSummary(context: StatusContext): SummaryResult {
     const ctx: AccessContext = { userId: context.userId, chatId: context.chatId, chatType: context.chatType };
 

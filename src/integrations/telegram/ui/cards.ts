@@ -114,6 +114,26 @@ export function parseUnregisterCallback(data: string): { action: string; token: 
   return null;
 }
 
+export function createDeleteConfirmKeyboard(token: string): InlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: '✅ Yes, Delete', callback_data: `delete_confirm:${token}` },
+        { text: '❌ Cancel', callback_data: `delete_cancel:${token}` },
+      ],
+    ],
+  };
+}
+
+export function parseDeleteCallback(data: string): { action: string; token: string } | null {
+  const parts = data.split(':');
+  if (parts.length !== 2) return null;
+  const action = parts[0];
+  if (action === 'delete_confirm') return { action: 'confirm', token: parts[1] };
+  if (action === 'delete_cancel') return { action: 'cancel', token: parts[1] };
+  return null;
+}
+
 export function createConfirmAutoMappingKeyboard(token: string): InlineKeyboardMarkup {
   return {
     inline_keyboard: [
@@ -171,6 +191,25 @@ export function createSearchKeyboard(sessionId: string, customerId: number, obje
   buttons.push([
     { text: '❌ Cancel', callback_data: `map_cancel:${sessionId}:${customerId}` },
   ]);
+
+  return { inline_keyboard: buttons };
+}
+
+export function createClientsPaginationKeyboard(token: string, page: number, totalPages: number): InlineKeyboardMarkup {
+  const buttons: InlineKeyboardButton[][] = [];
+
+  if (totalPages > 1) {
+    const navButtons: InlineKeyboardButton[] = [];
+    if (page > 1) {
+      navButtons.push({ text: '◀ Previous', callback_data: `clients_page:${token}:${page - 1}` });
+    }
+    if (page < totalPages) {
+      navButtons.push({ text: 'Next ▶', callback_data: `clients_page:${token}:${page + 1}` });
+    }
+    if (navButtons.length > 0) {
+      buttons.push(navButtons);
+    }
+  }
 
   return { inline_keyboard: buttons };
 }

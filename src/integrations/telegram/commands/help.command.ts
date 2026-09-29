@@ -3,91 +3,108 @@ import { formatHelpMessage, formatAccessDenied } from '@/integrations/telegram/u
 import { accessService } from '@/modules/groups/access.service';
 import { getConfig } from '@/config/env';
 
-function getHelpCommands(context: { userId: string; chatId: string; chatType: string }) {
+interface HelpCommand {
+  command: string;
+  description: string;
+}
+
+interface HelpCategory {
+  title: string;
+  commands: HelpCommand[];
+}
+
+const baseCommands: HelpCommand[] = [
+  { command: 'help', description: 'Show this help' },
+  { command: 'chatid', description: 'Show this chat ID' },
+];
+
+const dailyMonitoring: HelpCommand[] = [
+  { command: 'summary', description: 'Status overview' },
+  { command: 'status', description: 'Quick status by client_id' },
+  { command: 'down', description: 'DOWN customers' },
+];
+
+const readCommands: HelpCommand[] = [
+  { command: 'clients', description: 'Browse customers' },
+  { command: 'clients <keyword>', description: 'Search by name or ID' },
+  { command: 'client', description: 'Full details by client_id' },
+];
+
+const manageCustomerCommands: HelpCommand[] = [
+  { command: 'add_client', description: 'Add new customer' },
+  { command: 'enable_client', description: 'Enable customer' },
+  { command: 'disable_client', description: 'Disable customer' },
+  { command: 'delete_client', description: 'Delete customer permanently' },
+  { command: 'csv_upload', description: 'Upload CSV to import customers' },
+];
+
+const adminGroupCommands: HelpCommand[] = [
+  { command: 'assign_client', description: 'Assign customer to group' },
+  { command: 'unassign_client', description: 'Unassign customer from group' },
+  { command: 'group_alerts', description: 'Toggle alert subscription: /group_alerts <client_id> on|off' },
+  { command: 'unregister_group', description: 'Unregister this group' },
+];
+
+const readGroupCommands: HelpCommand[] = [
+  { command: 'group_clients', description: 'List customers with alert state' },
+];
+
+const prtgMappingCommands: HelpCommand[] = [
+  { command: 'prtg_inventory', description: 'Show/fetch PRTG inventory' },
+  { command: 'prtg_search', description: 'Search PRTG sensors' },
+  { command: 'map_client', description: 'Map customer to PRTG sensor' },
+  { command: 'auto_map', description: 'Auto-match sensors' },
+  { command: 'unmap_client', description: 'Remove PRTG mapping' },
+  { command: 'mappings', description: 'List all PRTG mappings' },
+];
+
+function getHelpCommands(context: { userId: string; chatId: string; chatType: string }): HelpCategory[] {
   const config = getConfig();
   const isAdmin = accessService.isAdmin(context.userId);
   const isGlobalGroup = accessService.isGlobalGroup(context.chatId);
   const isPrivateChat = accessService.isPrivateChat(context.chatType);
   const isGroupChat = accessService.isGroupChat(context.chatType);
   const isGroupRegistered = isGroupChat && accessService.isGroupRegistered(context.chatId);
+  const canManage = accessService.canManageCustomers(context);
+  const canMap = accessService.canManageMappings(context);
 
-  const baseCommands = [
-    { command: 'help', description: 'Show this help message' },
-    { command: 'chatid', description: 'Show current chat ID and type' },
-  ];
+  const utilities: HelpCommand[] = [...baseCommands];
 
-  const dailyMonitoring = [
-    { command: 'summary', description: 'Show customer status summary' },
-    { command: 'status', description: 'Show customer status' },
-    { command: 'down', description: 'List DOWN customers' },
-  ];
+  if (isPrivateChat && isGlobalGroup) {
+    return [];
+  }
 
-  const customers = [
-    { command: 'clients', description: 'List all customers' },
-    { command: 'client', description: 'Show customer detail' },
-    { command: 'add_client', description: 'Add new customer' },
-    { command: 'enable_client', description: 'Enable customer' },
-    { command: 'disable_client', description: 'Disable customer' },
-    { command: 'csv_upload', description: 'Upload CSV to import customers' },
-  ];
-
-  const prtgMapping = [
-    { command: 'prtg_inventory', description: 'Show/fetch PRTG inventory' },
-    { command: 'prtg_search', description: 'Search PRTG sensors' },
-    { command: 'map_client', description: 'Map customer to PRTG sensor' },
-    { command: 'auto_map', description: 'Auto-map PRTG sensors with preview confirmation' },
-    { command: 'unmap_client', description: 'Remove PRTG mapping' },
-    { command: 'mappings', description: 'List all PRTG mappings' },
-  ];
-
-  const groupsAlerts = [
-    { command: 'group_clients', description: 'List customers with alert state' },
-    { command: 'group_alerts', description: 'Toggle alert subscription: /group_alerts <client_id> on|off' },
-    { command: 'assign_client', description: 'Assign customer to group' },
-    { command: 'unassign_client', description: 'Unassign customer from group' },
-    { command: 'register_group', description: 'Register this group' },
-    { command: 'unregister_group', description: 'Unregister this group' },
-  ];
-
-  const utilities = [
-    ...baseCommands,
-  ];
-
-  if (isAdmin) {
-    if (isPrivateChat) {
-      return [
-        { title: 'Daily Monitoring', commands: dailyMonitoring },
-        { title: 'Customers', commands: customers },
-        { title: 'PRTG Mapping', commands: prtgMapping },
-        { title: 'Utilities', commands: utilities },
-      ];
+  if (isPrivateChat) {
+    if (!isAdmin) {
+      return [{ title: 'Utilities', commands: utilities }];
     }
-
-    if (isGlobalGroup) {
-      return [
-        { title: 'Daily Monitoring', commands: dailyMonitoring },
-        { title: 'Customers', commands: customers },
-        { title: 'Groups & Alerts', commands: [
-          ...groupsAlerts,
-        ] },
-        { title: 'PRTG Mapping', commands: prtgMapping },
-        { title: 'Utilities', commands: utilities },
-      ];
-    }
+    const categories: HelpCategory[] = [
+      { title: 'Daily Monitoring', commands: dailyMonitoring },
+      { title: 'Customers', commands: [...readCommands, ...manageCustomerCommands] },
+      { title: 'PRTG Mapping', commands: canMap ? prtgMappingCommands : [] },
+      { title: 'Utilities', commands: utilities },
+    ];
+    return categories.filter((c) => c.commands.length > 0);
   }
 
   if (isGlobalGroup) {
-    return [
+    if (isAdmin) {
+      const categories: HelpCategory[] = [
+        { title: 'Daily Monitoring', commands: dailyMonitoring },
+        { title: 'Customers', commands: [...readCommands, ...manageCustomerCommands] },
+        { title: 'Groups & Alerts', commands: [...readGroupCommands, ...adminGroupCommands] },
+        { title: 'PRTG Mapping', commands: prtgMappingCommands },
+        { title: 'Utilities', commands: utilities },
+      ];
+      return categories.filter((c) => c.commands.length > 0);
+    }
+    const categories: HelpCategory[] = [
       { title: 'Daily Monitoring', commands: dailyMonitoring },
-      { title: 'Customers', commands: [
-        { command: 'clients', description: 'List all customers (read-only)' },
-        { command: 'client', description: 'Show customer detail (read-only)' },
-      ] },
-      { title: 'Groups & Alerts', commands: [
-        { command: 'group_clients', description: 'List all customers with alert state' },
-      ] },
+      { title: 'Customers', commands: readCommands },
+      { title: 'Groups & Alerts', commands: [...readGroupCommands, ...(isAdmin ? adminGroupCommands : [])] },
       { title: 'Utilities', commands: utilities },
     ];
+    return categories.filter((c) => c.commands.length > 0);
   }
 
   if (isGroupChat) {
@@ -95,51 +112,36 @@ function getHelpCommands(context: { userId: string; chatId: string; chatType: st
       return [{ title: 'Utilities', commands: utilities }];
     }
 
-    if (isAdmin) {
-      if (isGroupRegistered) {
-        return [
-          { title: 'Daily Monitoring', commands: dailyMonitoring },
-          { title: 'Customers', commands: customers },
-          { title: 'Groups & Alerts', commands: [
-            { command: 'group_clients', description: 'List all customers with alert state' },
-            { command: 'group_alerts', description: 'Toggle alert subscription: /group_alerts <client_id> on|off' },
-            { command: 'assign_client', description: 'Assign customer to group' },
-            { command: 'unassign_client', description: 'Unassign customer from group' },
-            { command: 'unregister_group', description: 'Unregister this group' },
-          ] },
-          { title: 'PRTG Mapping', commands: prtgMapping },
-          { title: 'Utilities', commands: utilities },
-        ];
-      } else {
-        return [
-          { title: 'Utilities', commands: [
-            ...baseCommands,
-            { command: 'register_group', description: 'Register this group' },
-          ] },
-        ];
-      }
-    }
-
-    if (isGroupRegistered) {
-      return [
+    if (isAdmin && isGroupRegistered) {
+      const categories: HelpCategory[] = [
         { title: 'Daily Monitoring', commands: dailyMonitoring },
-        { title: 'Customers', commands: [
-          { command: 'clients', description: 'List visible customers' },
-          { command: 'client', description: 'Show customer detail' },
-        ] },
-        { title: 'Groups & Alerts', commands: [
-          { command: 'group_clients', description: 'List visible customers with alert state' },
-        ] },
+        { title: 'Customers', commands: readCommands },
+        { title: 'Groups & Alerts', commands: [...readGroupCommands, ...adminGroupCommands] },
         { title: 'Utilities', commands: utilities },
       ];
-    } else {
-      return [
-        { title: 'Utilities', commands: [
-          ...baseCommands,
-          { command: 'register_group', description: 'Register this group (admin only)' },
-        ] },
-      ];
+      return categories.filter((c) => c.commands.length > 0);
     }
+
+    if (!isGroupRegistered && isAdmin) {
+      const categories: HelpCategory[] = [
+        { title: 'Daily Monitoring', commands: dailyMonitoring },
+        { title: 'Customers', commands: readCommands },
+        { title: 'Utilities', commands: [...baseCommands, { command: 'register_group', description: 'Register this group (admin only)' }] },
+      ];
+      return categories.filter((c) => c.commands.length > 0);
+    }
+
+    if (isGroupRegistered && !isAdmin) {
+      const categories: HelpCategory[] = [
+        { title: 'Daily Monitoring', commands: dailyMonitoring },
+        { title: 'Customers', commands: readCommands },
+        { title: 'Groups & Alerts', commands: readGroupCommands },
+        { title: 'Utilities', commands: utilities },
+      ];
+      return categories.filter((c) => c.commands.length > 0);
+    }
+
+    return [{ title: 'Utilities', commands: utilities }];
   }
 
   return [{ title: 'Utilities', commands: utilities }];

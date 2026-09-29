@@ -29,6 +29,16 @@ const STATUS_LABEL: Record<StatusDetail['status'], string> = {
   NOT_CHECKED: 'NOT CHECKED',
 };
 
+const CATEGORY_ICON: Record<string, string> = {
+  'Daily Monitoring': '📊',
+  'Customers': '👥',
+  'Groups & Alerts': '🔔',
+  'PRTG Mapping': '🔗',
+  'Utilities': '🧰',
+};
+
+const SEPARATOR = '────────';
+
 export function formatChatInfo(chatId: string, chatType: string): string {
   return [
     '🤖 <b>CHAT INFORMATION</b>',
@@ -42,22 +52,27 @@ export function formatHelpMessage(
   categories: Array<{ title: string; commands: Array<{ command: string; description: string }> }>,
   subtitle?: string,
 ): string {
-  const lines = ['🤖 <b>PRTG Telegram Bot</b>', ''];
+  const lines = ['<b>PRTG Monitor · Help</b>', 'Tap a command to run it, or copy it to add details.'];
 
   if (subtitle) {
     lines.push(htmlEscape(subtitle));
-    lines.push('');
   }
 
-  for (const category of categories) {
-    if (category.commands.length === 0) continue;
-    lines.push(`<b>${htmlEscape(category.title)}</b>`);
-    for (const cmd of category.commands) {
-      lines.push(`<code>/${htmlEscape(cmd.command)}</code> — ${htmlEscape(cmd.description)}`);
+  const visible = categories.filter((c) => c.commands.length > 0);
+
+  for (let i = 0; i < visible.length; i++) {
+    lines.push(SEPARATOR);
+    const icon = CATEGORY_ICON[visible[i].title] ?? '•';
+    lines.push(`${icon} <b>${htmlEscape(visible[i].title)}</b>`);
+    for (const cmd of visible[i].commands) {
+      const parts = cmd.command.split(' ');
+      const cmdName = `<b>/${htmlEscape(parts[0])}</b>`;
+      const argText = parts.length > 1 ? ` <code>&lt;${htmlEscape(parts.slice(1).join(' '))}&gt;</code>` : '';
+      lines.push(`${cmdName}${argText} — ${htmlEscape(cmd.description)}`);
     }
-    lines.push('');
   }
 
+  lines.push(SEPARATOR);
   lines.push('<i>Status is read from monitoring results. ICMP and polling engine are admin-controlled (V6).</i>');
 
   return lines.join('\n');
@@ -68,8 +83,15 @@ export function formatCustomerEntry(d: StatusDetail): string {
   const label = STATUS_LABEL[d.status];
   const isDisabled = d.status === 'DISABLED';
 
+  let statusLabel = label;
+  if (d.status === 'UNKNOWN' && d.dataQuality === 'stale') {
+    statusLabel = 'UNKNOWN (stale data)';
+  } else if (d.status === 'UNKNOWN' && d.dataQuality === 'unavailable') {
+    statusLabel = 'UNKNOWN (unavailable)';
+  }
+
   const lines = [
-    `<b>${icon} ${label}</b> · <code>${htmlEscape(d.customer.clientId)}</code>`,
+    `<b>${icon} ${statusLabel}</b> · <code>${htmlEscape(d.customer.clientId)}</code>`,
     htmlEscape(d.customer.name),
   ];
 
@@ -80,7 +102,8 @@ export function formatCustomerEntry(d: StatusDetail): string {
   if (d.customer.monitorType === 'prtg') {
     if (d.mapping) {
       const verifiedLabel = d.mapping.verified ? 'Verified' : 'Unverified';
-      lines.push(`Mapping: #${d.mapping.prtgObjectId} · ${verifiedLabel}`);
+      const suffix = isDisabled ? ' (not in use)' : '';
+      lines.push(`Mapping: #${d.mapping.prtgObjectId} · ${verifiedLabel}${suffix}`);
     } else {
       lines.push('Mapping: Unmapped');
     }
@@ -101,9 +124,65 @@ export function formatCustomerList(details: StatusDetail[]): string {
     lines.push('');
   }
 
-  lines.push('View details: /client &lt;client_id&gt;');
+  lines.push('View details: <b>/client</b> <code>&lt;client_id&gt;</code>');
 
   return lines.join('\n');
+}
+
+export function formatCustomerListPage(details: StatusDetail[], page: number, total: number, totalPages: number): string {
+  const start = (page - 1) * 8 + 1;
+  const end = start + details.length - 1;
+
+  if (details.length === 0) {
+    return '<b>Customers</b>\n\nNo visible customers found.';
+  }
+
+  const lines = ['<b>Customers</b>'];
+  lines.push(`Showing ${start}–${end} of ${total} · Page ${page}/${totalPages}`);
+
+  for (let i = 0; i < details.length; i++) {
+    lines.push(SEPARATOR);
+    lines.push(formatCustomerEntry(details[i]));
+  }
+
+  lines.push(SEPARATOR);
+  lines.push(`View details: <b>/client</b> <code>&lt;client_id&gt;</code>`);
+  lines.push(`Search: <b>/clients</b> <code>&lt;keyword&gt;</code>`);
+
+  return lines.join('\n');
+}
+
+export function formatCustomerSearchPage(keyword: string, details: StatusDetail[], page: number, total: number, totalPages: number): string {
+  const start = (page - 1) * 8 + 1;
+  const end = start + details.length - 1;
+
+  if (total === 0) {
+    return '<b>Customers</b>\n'
+      + `Search: <code>${htmlEscape(keyword)}</code>\n`
+      + 'No customers match your search.\n'
+      + 'Try a shorter keyword or check the Client ID.\n'
+      + '\n'
+      + `All customers: <b>/clients</b>`;
+  }
+
+  const lines = ['<b>Customers</b>'];
+  lines.push(`Search: <code>${htmlEscape(keyword)}</code>`);
+  lines.push(`Showing ${start}–${end} of ${total} matches · Page ${page}/${totalPages}`);
+
+  for (let i = 0; i < details.length; i++) {
+    lines.push(SEPARATOR);
+    lines.push(formatCustomerEntry(details[i]));
+  }
+
+  lines.push(SEPARATOR);
+  lines.push(`View details: <b>/client</b> <code>&lt;client_id&gt;</code>`);
+  lines.push(`All customers: <b>/clients</b>`);
+
+  return lines.join('\n');
+}
+
+export function formatExpiredPagination(): string {
+  return 'This list has expired. Send <b>/clients</b> again.';
 }
 
 export function formatCustomerDetail(customer: {
@@ -286,7 +365,7 @@ export function formatClientAssigned(customer: { clientId: string; name: string 
     `Client ID : <code>${customer.clientId}</code>`,
     `Name      : ${customer.name}`,
     'Visibility: Visible',
-    'Alerts    : OFF (use /group_alerts <client_id> on to enable)',
+    'Alerts    : OFF (use <b>/group_alerts</b> <code>&lt;client_id&gt;</code> on to enable)',
   ].join('\n');
 }
 
@@ -300,7 +379,7 @@ export function formatClientUnassigned(customer: { clientId: string; name: strin
 
   if (receiveAlerts) {
     lines.push('', 'Client is hidden. Alert subscription remains ON.');
-    lines.push('Use /group_alerts <client_id> off to disable alerts.');
+    lines.push('Use <b>/group_alerts</b> <code>&lt;client_id&gt;</code> off to disable alerts.');
   }
 
   return lines.join('\n');
@@ -348,7 +427,7 @@ export function formatAssignFirst(): string {
     '',
     'This customer is not visible in this group.',
     'Assign the customer first:',
-    '<code>/assign_client <client_id></code>',
+    '<b>/assign_client</b> <code>&lt;client_id&gt;</code>',
   ].join('\n');
 }
 
@@ -372,9 +451,9 @@ export function formatNoClients(): string {
 
 export function formatNotRegistered(isAdmin: boolean): string {
   if (isAdmin) {
-    return '⚠️ This group is not registered.\nRun /register_group to register this group.';
+    return '⚠️ This group is not registered.\nRun <b>/register_group</b> to register this group.';
   }
-  return '❌ This group is not registered. Ask an admin to run /register_group.';
+  return '❌ This group is not registered. Ask an admin to run <b>/register_group</b>.';
 }
 
 export function formatGlobalGroupNoUnregister(): string {
@@ -386,7 +465,7 @@ export function formatGlobalGroupNoAssignment(): string {
 }
 
 export function formatGlobalGroupNoUnassign(): string {
-  return 'ℹ️ Global Group cannot hide customers. Use /group_alerts <client_id> off to disable alerts for specific customers.';
+  return 'ℹ️ Global Group cannot hide customers. Use <b>/group_alerts</b> <code>&lt;client_id&gt;</code> off to disable alerts for specific customers.';
 }
 
 export function formatGlobalGroupAlertEnabled(): string {
@@ -395,6 +474,48 @@ export function formatGlobalGroupAlertEnabled(): string {
 
 export function formatGlobalGroupAlertDisabled(): string {
   return '✅ Alert subscription disabled for Global Group.';
+}
+
+export function formatDeleteClientPreview(
+  customer: { clientId: string; name: string },
+  counts: {
+    groups: number;
+    mappings: number;
+    alerts: number;
+  },
+): string {
+  return [
+    '⚠️ <b>DELETE CUSTOMER</b>',
+    '',
+    `Client ID  : <code>${customer.clientId}</code>`,
+    `Name       : ${customer.name}`,
+    '',
+    SEPARATOR,
+    'The following data will be removed:',
+    `· ${counts.mappings} PRTG mapping(s)`,
+    `· ${counts.groups} group access assignment(s)`,
+    `· ${counts.alerts} pending/sending alert(s) (cancelled + removed)`,
+    `· All alert outbox history (CASCADE)`,
+    `· 1 monitoring state record`,
+    '· 1 customer record',
+    SEPARATOR,
+    '',
+    'Pending and sending alerts will be cancelled. Already-delivered Telegram messages cannot be recalled.',
+    'This action cannot be undone.',
+  ].join('\n');
+}
+
+export function formatDeleteClientSuccess(customer: { clientId: string; name: string }): string {
+  return [
+    '✅ <b>CUSTOMER DELETED</b>',
+    '',
+    `Client ID : <code>${customer.clientId}</code>`,
+    `Name      : ${customer.name}`,
+  ].join('\n');
+}
+
+export function formatDeleteClientCancelled(): string {
+  return '❌ Deletion cancelled.';
 }
 
 export function formatError(message: string): string {

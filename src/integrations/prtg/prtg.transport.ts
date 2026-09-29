@@ -8,7 +8,7 @@ import { getLogger } from '../../core/logger';
 const logger = getLogger().child({ module: 'PrtgTransport' });
 
 const DEFAULT_PAGE_SIZE = 500;
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_BODY_BYTES = 10 * 1024 * 1024;
 const MAX_PAGES_PER_FETCH = 100;
 
@@ -27,9 +27,20 @@ export class HttpsPrtgTransport {
   }
 
   async fetchPage(table: PrtgTable, start: number, count: number, signal?: AbortSignal): Promise<PrtgPageResult> {
+    const requestStart = Date.now();
+    logger.info({ table, start, count, elapsedMs: 0, phase: 'request_start' }, 'PRTG page request');
+
     const url = this.buildUrl(table, start, Math.min(count, this.pageSize));
 
-    const responseText = await this.request(url, signal, table);
+    let responseText: string;
+    try {
+      responseText = await this.request(url, signal, table, start, count);
+      logger.info({ table, start, count, elapsedMs: Date.now() - requestStart, phase: 'request_end', outcome: 'success' }, 'PRTG page request completed');
+    } catch (error) {
+      const elapsed = Date.now() - requestStart;
+      logger.warn({ table, start, count, elapsedMs: elapsed, phase: 'request_end', outcome: 'failed', errType: error instanceof Error ? error.constructor.name : typeof error }, 'PRTG page request failed');
+      throw error;
+    }
 
     try {
       const parsed = JSON.parse(responseText) as unknown;
@@ -95,7 +106,10 @@ export class HttpsPrtgTransport {
     return base;
   }
 
-  private request(url: URL, signal: AbortSignal | undefined, table: PrtgTable): Promise<string> {
+  private request(url: URL, signal: AbortSignal | undefined, table: PrtgTable, start: number, count: number): Promise<string> {
+    const requestStart = Date.now();
+    let phase = 'connecting';
+
     return new Promise<string>((resolve, reject) => {
       let body = '';
       let bodyBytes = 0;
@@ -121,6 +135,7 @@ export class HttpsPrtgTransport {
         settled = true;
         req.destroy();
         cleanup();
+        logger.warn({ table, elapsedMs: Date.now() - requestStart, phase }, 'PRTG request aborted');
         reject(AppError.external('PRTG API request aborted', { table }));
       };
       signal?.addEventListener('abort', onAbort, { once: true });
@@ -130,6 +145,7 @@ export class HttpsPrtgTransport {
         settled = true;
         req.destroy(new Error('timeout'));
         cleanup();
+        logger.warn({ table, start, count, elapsedMs: Date.now() - requestStart, phase, timeoutMs: this.timeoutMs }, 'PRTG API request timed out');
         reject(AppError.external('PRTG API request timed out', { table }));
       }, this.timeoutMs);
 
@@ -144,6 +160,7 @@ export class HttpsPrtgTransport {
         }
         const err = error as NodeJS.ErrnoException;
         const isAbort = err.code === 'ABORTE' || err.name === 'AbortError' || /abort/i.test(err.message || '');
+        logger.warn({ table, elapsedMs: Date.now() - requestStart, phase }, 'PRTG request failed');
         reject(
           isAbort
             ? AppError.external('PRTG API request aborted', { table })
@@ -152,12 +169,14 @@ export class HttpsPrtgTransport {
       };
 
       const req = this.httpsModule.request(options, (res) => {
+        phase = 'connected';
         if (res.statusCode && res.statusCode >= 300) {
           res.resume();
           logger.warn({ statusCode: res.statusCode }, 'PRTG request returned non-OK status');
           fail(AppError.external('PRTG API request failed', { httpStatus: res.statusCode, table, redirect: Boolean(res.headers.location) }));
           return;
         }
+        phase = 'response_headers';
         res.setEncoding('utf8');
         res.on('data', (chunk: string) => {
           bodyBytes += Buffer.byteLength(chunk);
@@ -178,6 +197,14 @@ export class HttpsPrtgTransport {
       });
 
       req.on('error', fail);
+      req.on('socket', (socket: { on: (event: string, cb: () => void) => void; connect: boolean; remoteAddress?: string }) => {
+        if (!socket.connect) {
+          socket.on('connect', () => { phase = 'connected'; });
+        } else {
+          phase = 'connected';
+        }
+        socket.on('secureConnect', () => { phase = 'tls_complete'; });
+      });
       req.end();
     });
   }

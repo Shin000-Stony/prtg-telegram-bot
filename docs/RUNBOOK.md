@@ -300,3 +300,24 @@ docker compose up -d --build
 - `PRTG_TLS_REJECT_UNAUTHORIZED=true` by default (strict TLS); set to `false` to accept self-signed PRTG certs
 - Container runs as UID 1000:1000 (non-root)
 - All dynamic values HTML-escaped before sending to Telegram
+
+## V8 Handover Status — 29 September 2026
+
+Implementation scope is complete.
+
+Live verification confirmed by the project owner:
+- Dummy customer deletion completed successfully.
+- DOWN and RECOVERY alerts were received in Telegram.
+- Operator UI was reviewed and accepted.
+- The bot was demonstrated to office staff.
+
+Automated verification:
+- CSV template → upload → preview → confirmation was verified
+  through an integration test.
+- Latest reported full-suite result: 935/940 passed.
+- Five failures in pelanggan-import and status-routing were
+  reported as matching the task baseline.
+- Subsequent targeted checks are recorded in the implementation reports.
+
+Known test failures remain documented; this release is not described
+as having an entirely passing test suite.

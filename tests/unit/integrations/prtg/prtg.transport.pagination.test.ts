@@ -88,7 +88,7 @@ describe('R6: Transport pagination and completeness', () => {
 
       const p = tr.fetchPage('sensors', 0, 500);
 
-      vi.advanceTimersByTime(11000);
+      vi.advanceTimersByTime(21000);
 
       await expect(p).rejects.toThrow('timed out');
       vi.useRealTimers();

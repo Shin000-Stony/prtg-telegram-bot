@@ -726,6 +726,7 @@ beforeEach(() => {
         }));
         vi.doMock('@/integrations/telegram/commands/clients.command', () => ({
           clientsCommand: vi.fn(),
+          handleClientsPagination: vi.fn(),
         }));
         vi.doMock('@/integrations/telegram/commands/client.command', () => ({
           clientCommand: vi.fn(),
@@ -778,6 +779,12 @@ beforeEach(() => {
         vi.doMock('@/integrations/telegram/commands/mappings.command', () => ({
           mappingsCommand: vi.fn(),
         }));
+        vi.doMock('@/integrations/telegram/commands/csv-upload.command', () => ({
+          csvUploadCommand: vi.fn(),
+        }));
+        vi.doMock('@/integrations/telegram/commands/delete-client.command', () => ({
+          deleteClientCommand: vi.fn(),
+        }));
         vi.doMock('@/integrations/telegram/handlers/csv-import.handler', () => ({
           handleCsvDocument: vi.fn(),
           handleCsvConfirm: vi.fn(),
@@ -786,6 +793,10 @@ beforeEach(() => {
         vi.doMock('@/integrations/telegram/handlers/unregister-group.handler', () => ({
           handleUnregisterConfirm: vi.fn(),
           handleUnregisterCancel: vi.fn(),
+        }));
+        vi.doMock('@/integrations/telegram/handlers/delete-confirm.handler', () => ({
+          handleDeleteConfirm: vi.fn(),
+          handleDeleteCancel: vi.fn(),
         }));
         vi.doMock('@/integrations/telegram/handlers/mapping-callbacks', () => ({
           handleMapConfirm: vi.fn(),

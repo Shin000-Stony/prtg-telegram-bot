@@ -16,12 +16,16 @@ import { prtgInventoryCommand } from './integrations/telegram/commands/prtg-inve
 import { prtgSearchCommand } from './integrations/telegram/commands/prtg-search.command';
 import { mapClientCommand } from './integrations/telegram/commands/map-client.command';
 import { statusCommand, summaryCommand, downCommand } from './integrations/telegram/commands/status.command';
+import { csvUploadCommand } from './integrations/telegram/commands/csv-upload.command';
+import { deleteClientCommand } from './integrations/telegram/commands/delete-client.command';
 import { autoMapCommand } from './integrations/telegram/commands/auto-map.command';
 import { unmapClientCommand } from './integrations/telegram/commands/unmap-client.command';
 import { mappingsCommand } from './integrations/telegram/commands/mappings.command';
 import { handleCsvDocument, handleCsvConfirm, handleCsvCancel } from './integrations/telegram/handlers/csv-import.handler';
 import { handleUnregisterConfirm, handleUnregisterCancel } from './integrations/telegram/handlers/unregister-group.handler';
+import { handleDeleteConfirm, handleDeleteCancel } from './integrations/telegram/handlers/delete-confirm.handler';
 import { handleMapConfirm, handleMapCancel, handleMapSearch, handleMapSelect, handleMapVerify, handleAutoMapApply, handleAutoMapCancel, handleUnmapConfirm, handleUnmapCancel, handleSearchPagination } from './integrations/telegram/handlers/mapping-callbacks';
+import { handleClientsPagination } from './integrations/telegram/commands/clients.command';
 import { setPrtgInventoryCache } from './integrations/prtg/prtg-inventory.shared';
 import { getLogger } from './core/logger';
 import { createPrtgClient } from './integrations/prtg/prtg.client';
@@ -91,6 +95,7 @@ async function main(): Promise<void> {
   bot.command('add_client', addClientCommand);
   bot.command('enable_client', enableClientCommand);
   bot.command('disable_client', disableClientCommand);
+  bot.command('delete_client', deleteClientCommand);
 
   // V3 commands
   bot.command('register_group', registerGroupCommand);
@@ -113,6 +118,9 @@ async function main(): Promise<void> {
   bot.command('summary', summaryCommand);
   bot.command('down', downCommand);
 
+  // CSV import
+  bot.command('csv_upload', csvUploadCommand);
+
   // CSV import handlers
   bot.on('document', handleCsvDocument);
   bot.action(/csv_confirm:.+/, handleCsvConfirm);
@@ -122,18 +130,22 @@ async function main(): Promise<void> {
   bot.action(/group_unregister_confirm:.+/, handleUnregisterConfirm);
   bot.action(/group_unregister_cancel:.+/, handleUnregisterCancel);
 
+  // Delete client callback handlers
+  bot.action(/^delete_confirm:.+$/, handleDeleteConfirm);
+  bot.action(/^delete_cancel:.+$/, handleDeleteCancel);
+
   // V4 Mapping callback handlers
-  bot.action(/map_confirm:.+/, handleMapConfirm);
-  bot.action(/map_cancel:.+/, handleMapCancel);
-  bot.action(/map_search:.+/, handleMapSearch);
-  // map:<sessionId>:<customerId>:<objectId> where sessionId is UUID
+  bot.action(/^map_confirm:.+$/, handleMapConfirm);
+  bot.action(/^map_cancel:.+$/, handleMapCancel);
+  bot.action(/^map_search:.+$/, handleMapSearch);
   bot.action(/^map:[a-f0-9-]+:\d+:\d+$/i, handleMapSelect);
-  bot.action(/map_verify:.+/, handleMapVerify);
-  bot.action(/auto_apply:.+/, handleAutoMapApply);
-  bot.action(/auto_cancel:.+/, handleAutoMapCancel);
-  bot.action(/unmap_confirm:.+/, handleUnmapConfirm);
-  bot.action(/unmap_cancel:.+/, handleUnmapCancel);
-  bot.action(/search_page:.+/, handleSearchPagination);
+  bot.action(/^map_verify:.+$/, handleMapVerify);
+  bot.action(/^auto_apply:.+$/, handleAutoMapApply);
+  bot.action(/^auto_cancel:.+$/, handleAutoMapCancel);
+  bot.action(/^unmap_confirm:.+$/, handleUnmapConfirm);
+  bot.action(/^unmap_cancel:.+$/, handleUnmapCancel);
+  bot.action(/^search_page:.+$/, handleSearchPagination);
+  bot.action(/^clients_page:[^:]+:[^:]+$/i, handleClientsPagination);
 
   const monitoringConfig = createMonitoringConfig(getConfig());
 

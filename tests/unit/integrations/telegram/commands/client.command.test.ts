@@ -202,7 +202,7 @@ describe('/client command', () => {
 
       expect(ctx.reply).toHaveBeenCalled();
       const callArgs = ctx.reply.mock.calls[0][0];
-      expect(callArgs).toContain('Usage: /client <client_id>');
+      expect(callArgs).toContain('Usage: <b>/client</b> <code>&lt;client_id&gt;</code>');
     });
   });
 

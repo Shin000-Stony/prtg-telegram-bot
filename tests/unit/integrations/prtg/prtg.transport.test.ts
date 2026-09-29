@@ -239,7 +239,37 @@ describe('HttpsPrtgTransport', () => {
 
       const p = tr.fetchPage('sensors', 0, 500);
 
-      vi.advanceTimersByTime(11000);
+      vi.advanceTimersByTime(21000);
+
+      await expect(p).rejects.toThrow('timed out');
+      vi.useRealTimers();
+    });
+
+    it('succeeds when response arrives after 10s but before 20s', async () => {
+      vi.useFakeTimers();
+      const fakeHttps = new FakeHttps([{ statusCode: 200, body: JSON.stringify(sensorEnvelope([{ objid: 1, device: 'D', sensor: 'S', type: 'Ping' }])) }]);
+      const tr = transport(fakeHttps);
+
+      const p = tr.fetchPage('sensors', 0, 500);
+
+      vi.advanceTimersByTime(10_000);
+      fakeHttps.requests[0].res.flushObject(sensorEnvelope([{ objid: 1, device: 'D', sensor: 'S', type: 'Ping' }]));
+
+      await vi.runAllTimersAsync();
+      await p;
+      vi.useRealTimers();
+    });
+
+    it('rejects with phase=response_headers when timeout fires after headers received', async () => {
+      vi.useFakeTimers();
+      const fakeHttps = new FakeHttps([{ statusCode: 200, body: JSON.stringify(sensorEnvelope([{ objid: 1, device: 'D', sensor: 'S', type: 'Ping' }])) }]);
+      const tr = transport(fakeHttps);
+
+      const p = tr.fetchPage('sensors', 0, 500);
+
+      // Response headers are received immediately (FakeHttps triggers cb synchronously)
+      // But data never flushes, so timeout fires at 20s with phase=response_headers
+      vi.advanceTimersByTime(21000);
 
       await expect(p).rejects.toThrow('timed out');
       vi.useRealTimers();

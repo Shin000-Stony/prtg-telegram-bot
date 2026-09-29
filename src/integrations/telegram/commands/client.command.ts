@@ -25,7 +25,7 @@ export async function clientCommand(ctx: BotContext): Promise<void> {
 
   const parts = ctx.message.text.trim().split(/\s+/);
   if (parts.length < 2) {
-    await ctx.reply(formatError('Usage: /client <client_id>'));
+    await ctx.reply(formatError('Usage: <b>/client</b> <code>&lt;client_id&gt;</code>'));
     return;
   }
 

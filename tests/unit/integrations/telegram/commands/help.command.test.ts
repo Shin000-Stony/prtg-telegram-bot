@@ -441,5 +441,76 @@ describe('/help context tests', () => {
       expect(callArgs).toContain('<code>');
       expect(callArgs).toContain('<i>');
     });
+
+    it('shows new title and subtitle', async () => {
+      const ctx = makeContext({ userId: '123456789', chatId: '123456789', chatType: 'private' });
+      await helpCommand(ctx);
+
+      const callArgs = ctx.reply.mock.calls[0][0];
+      expect(callArgs).toContain('PRTG Monitor · Help');
+      expect(callArgs).toContain('Tap a command to run it, or copy it to add details.');
+    });
+
+    it('hides empty categories and their separators', async () => {
+      const ctx = makeContext({ userId: '999999999', chatId: '-100888888888', chatType: 'group' });
+      await helpCommand(ctx);
+
+      const callArgs = ctx.reply.mock.calls[0][0];
+      expect(callArgs).toContain('🧰 <b>Utilities</b>');
+      expect(callArgs).not.toContain('📊');
+      expect(callArgs).not.toContain('👥');
+      expect(callArgs).not.toContain('🔔');
+      expect(callArgs).not.toContain('🔗');
+    });
+
+    it('non-global registered admin does not see /add_client or /csv_upload', async () => {
+      groupService.register('-100111112301', 'Test Group');
+      const ctx = makeContext({ userId: '123456789', chatId: '-100111112301', chatType: 'group' });
+      await helpCommand(ctx);
+
+      const callArgs = ctx.reply.mock.calls[0][0];
+      expect(callArgs).not.toContain('/add_client');
+      expect(callArgs).not.toContain('/enable_client');
+      expect(callArgs).not.toContain('/disable_client');
+      expect(callArgs).not.toContain('/csv_upload');
+    });
+
+    it('non-global registered admin still sees /assign_client and /group_alerts', async () => {
+      groupService.register('-100111112301', 'Test Group');
+      const ctx = makeContext({ userId: '123456789', chatId: '-100111112301', chatType: 'group' });
+      await helpCommand(ctx);
+
+      const callArgs = ctx.reply.mock.calls[0][0];
+      expect(callArgs).toContain('/assign_client');
+      expect(callArgs).toContain('/unassign_client');
+      expect(callArgs).toContain('/group_alerts');
+      expect(callArgs).toContain('/unregister_group');
+    });
+
+    it('registered non-admin does not see /assign_client and PRTG mapping commands', async () => {
+      groupService.register('-100111112302', 'Test Group');
+      const ctx = makeContext({ userId: '999999999', chatId: '-100111112302', chatType: 'group' });
+      await helpCommand(ctx);
+
+      const callArgs = ctx.reply.mock.calls[0][0];
+      expect(callArgs).not.toContain('/assign_client');
+      expect(callArgs).not.toContain('/unassign_client');
+      expect(callArgs).not.toContain('/group_alerts');
+      expect(callArgs).not.toContain('/unregister_group');
+      expect(callArgs).not.toContain('/prtg_inventory');
+      expect(callArgs).not.toContain('/prtg_search');
+      expect(callArgs).not.toContain('/map_client');
+      expect(callArgs).not.toContain('/auto_map');
+      expect(callArgs).not.toContain('/unmap_client');
+      expect(callArgs).not.toContain('/mappings');
+    });
+
+    it('uses en-dash separator between blocks', async () => {
+      const ctx = makeContext({ userId: '123456789', chatId: '123456789', chatType: 'private' });
+      await helpCommand(ctx);
+
+      const callArgs = ctx.reply.mock.calls[0][0];
+      expect(callArgs).toContain('────────');
+    });
   });
 });
