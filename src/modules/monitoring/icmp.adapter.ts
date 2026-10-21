@@ -92,8 +92,7 @@ function parseRtt(stdout: string): number | null {
 
 function buildPingArgs(host: string, timeoutMs: number): string[] {
   const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
-  const deadlineSeconds = timeoutSeconds + 2;
-  return ['-n', '-c', '1', '-W', String(timeoutSeconds), '-w', String(deadlineSeconds), host];
+  return ['-n', '-c', '1', '-W', String(timeoutSeconds), host];
 }
 
 export function createIcmpPingRunner(deps?: IcmpChildDeps): (host: string, timeoutMs: number, signal?: AbortSignal) => Promise<IcmpResult> {

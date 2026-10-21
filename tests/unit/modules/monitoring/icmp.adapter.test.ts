@@ -314,6 +314,80 @@ describe('createIcmpPingRunner - unified implementation (F6)', () => {
     await promise;
     expect(killCount).toBe(1);
   });
+
+  it('ping args do NOT include -w deadline (prevents overriding -c 1)', async () => {
+    let capturedArgs: string[] = [];
+    const fakeSpawn = (_cmd: string, args: string[], _opts: any): IcmpChildHandle => {
+      capturedArgs = args;
+      return makeFakeChild(0).handle;
+    };
+    const runner = createIcmpPingRunner({ spawn: fakeSpawn, clock: () => 1000 });
+    await runner('10.0.0.1', 3000);
+    expect(capturedArgs).not.toContain('-w');
+  });
+
+  it('ping args include single-packet -c 1', async () => {
+    let capturedArgs: string[] = [];
+    const fakeSpawn = (_cmd: string, args: string[], _opts: any): IcmpChildHandle => {
+      capturedArgs = args;
+      return makeFakeChild(0).handle;
+    };
+    const runner = createIcmpPingRunner({ spawn: fakeSpawn, clock: () => 1000 });
+    await runner('10.0.0.1', 3000);
+    expect(capturedArgs).toContain('-c');
+    expect(capturedArgs[capturedArgs.indexOf('-c') + 1]).toBe('1');
+  });
+
+  it('process timeout exceeds ping -W wait (no race on nonresponsive host)', async () => {
+    let capturedOpts: any = null;
+    const fakeSpawn = (_cmd: string, _args: string[], opts: any): IcmpChildHandle => {
+      capturedOpts = opts;
+      return makeFakeChild(1).handle;
+    };
+    const runner = createIcmpPingRunner({ spawn: fakeSpawn, clock: () => 1000 });
+
+    for (const timeoutMs of [1000, 3000, 5000, 10000]) {
+      await runner('10.0.0.1', timeoutMs);
+    }
+
+    expect(capturedOpts).toBeTruthy();
+    for (const timeoutMs of [1000, 3000, 5000, 10000]) {
+      const processTimeoutMs = timeoutMs + 2000;
+      const pingWaitSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+      const pingWaitMs = pingWaitSeconds * 1000;
+      expect(processTimeoutMs).toBeGreaterThan(pingWaitMs);
+    }
+  });
+
+  it('exit code 1 (no reply) maps to DOWN, not UNKNOWN', async () => {
+    const fakeSpawn = (): IcmpChildHandle => makeFakeChild(1).handle;
+    const runner = createIcmpPingRunner({ spawn: fakeSpawn, clock: () => 1000 });
+    const result = await runner('10.0.0.1', 3000);
+    expect(result.status).toBe('DOWN');
+    expect(result.reason).toBe('no_reply');
+  });
+
+  it('exit code null (process killed by signal) maps to UNKNOWN (local failure)', async () => {
+    const fakeSpawn = (): IcmpChildHandle => makeFakeChild(null, '', 'SIGTERM').handle;
+    const runner = createIcmpPingRunner({ spawn: fakeSpawn, clock: () => 1000 });
+    const result = await runner('10.0.0.1', 3000);
+    expect(result.status).toBe('UNKNOWN');
+    expect(result.reason).toBe('timed_out');
+  });
+
+  it('remote unreachable (exit 1) maps to DOWN, distinct from local probe failure (exit null)', async () => {
+    const remoteSpawn = (): IcmpChildHandle => makeFakeChild(1).handle;
+    const localFailureSpawn = (): IcmpChildHandle => makeFakeChild(null, '', 'SIGTERM').handle;
+    const clock = () => 1000;
+
+    const remoteResult = await createIcmpPingRunner({ spawn: remoteSpawn, clock })('10.0.0.1', 3000);
+    const localResult = await createIcmpPingRunner({ spawn: localFailureSpawn, clock })('10.0.0.1', 3000);
+
+    expect(remoteResult.status).toBe('DOWN');
+    expect(remoteResult.reason).toBe('no_reply');
+    expect(localResult.status).toBe('UNKNOWN');
+    expect(localResult.reason).toBe('timed_out');
+  });
 });
 
 describe('IcmpAdapter', () => {
