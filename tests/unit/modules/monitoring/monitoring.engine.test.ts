@@ -350,6 +350,137 @@ describe('MonitoringEngine', () => {
         expect(call[0]).not.toBe('; rm -rf /');
       }
     });
+
+    it('two consecutive ICMP DOWN observations stabilize to DOWN', async () => {
+      let callCount = 0;
+      const runPing = vi.fn().mockImplementation(async (): Promise<IcmpResult> => {
+        callCount++;
+        const t = currentTime + callCount * 1000;
+        return { status: 'DOWN', reason: 'no_reply', rtt: null, attemptAt: t - 100, completionAt: t };
+      });
+      const mockIcmp = new IcmpAdapter({ runPing, clock });
+
+      const engine = new MonitoringEngine({
+        customerService: {
+          listAll: () => customerRepository.findAllUnpaged({ enabled: true, monitorType: 'icmp' }),
+          getByClientId: (clientId: string) => customerRepository.findByClientId(clientId),
+        },
+        mappingService: { getByCustomerId: () => null },
+        cache: null,
+        icmpAdapter: mockIcmp,
+        repository: new MonitoringRepository(),
+        clock,
+        setTimeout: () => ({ cancel: () => {} }),
+      }, CONFIG);
+
+      await engine.runIcmpCycle();
+      let state = monitoringRepository.findById(
+        customerRepository.findByClientId('icmp1')!.id
+      );
+      expect(state).toBeDefined();
+      expect(state!.stableHealth).toBe('UNKNOWN');
+      expect(state!.consecutiveCount).toBe(1);
+
+      await engine.runIcmpCycle();
+      state = monitoringRepository.findById(
+        customerRepository.findByClientId('icmp1')!.id
+      );
+      expect(state!.stableHealth).toBe('DOWN');
+      expect(state!.consecutiveCount).toBe(2);
+      expect(state!.lastTransitionKind).toBe(null);
+    });
+
+    it('ICMP UP→DOWN→DOWN stabilizes and records DOWN transition', async () => {
+      let callCount = 0;
+      const runPing = vi.fn().mockImplementation(async (): Promise<IcmpResult> => {
+        callCount++;
+        const t = currentTime + callCount * 1000;
+        const status = callCount <= 2 ? 'UP' : 'DOWN';
+        const reason = status === 'UP' ? 'reply_received' : 'no_reply';
+        const rtt = status === 'UP' ? 5.0 : null;
+        return { status, reason, rtt, attemptAt: t - 100, completionAt: t };
+      });
+      const mockIcmp = new IcmpAdapter({ runPing, clock });
+
+      const engine = new MonitoringEngine({
+        customerService: {
+          listAll: () => customerRepository.findAllUnpaged({ enabled: true, monitorType: 'icmp' }),
+          getByClientId: (clientId: string) => customerRepository.findByClientId(clientId),
+        },
+        mappingService: { getByCustomerId: () => null },
+        cache: null,
+        icmpAdapter: mockIcmp,
+        repository: new MonitoringRepository(),
+        clock,
+        setTimeout: () => ({ cancel: () => {} }),
+      }, CONFIG);
+
+      await engine.runIcmpCycle();
+      let state = monitoringRepository.findById(
+        customerRepository.findByClientId('icmp1')!.id
+      );
+      expect(state!.stableHealth).toBe('UNKNOWN');
+
+      await engine.runIcmpCycle();
+      state = monitoringRepository.findById(
+        customerRepository.findByClientId('icmp1')!.id
+      );
+      expect(state!.stableHealth).toBe('UP');
+      expect(state!.lastTransitionKind).toBe(null);
+
+      await engine.runIcmpCycle();
+      state = monitoringRepository.findById(
+        customerRepository.findByClientId('icmp1')!.id
+      );
+      expect(state!.stableHealth).toBe('UP');
+      expect(state!.consecutiveCount).toBe(1);
+
+      await engine.runIcmpCycle();
+      state = monitoringRepository.findById(
+        customerRepository.findByClientId('icmp1')!.id
+      );
+      expect(state!.stableHealth).toBe('DOWN');
+      expect(state!.consecutiveCount).toBe(2);
+      expect(state!.lastTransitionKind).toBe('DOWN');
+    });
+
+    it('ICMP UNKNOWN observation does not advance stabilization', async () => {
+      let callCount = 0;
+      const runPing = vi.fn().mockImplementation(async (): Promise<IcmpResult> => {
+        callCount++;
+        const t = currentTime + callCount * 1000;
+        return { status: 'UNKNOWN', reason: 'timeout', rtt: null, attemptAt: t - 100, completionAt: t };
+      });
+      const mockIcmp = new IcmpAdapter({ runPing, clock });
+
+      const engine = new MonitoringEngine({
+        customerService: {
+          listAll: () => customerRepository.findAllUnpaged({ enabled: true, monitorType: 'icmp' }),
+          getByClientId: (clientId: string) => customerRepository.findByClientId(clientId),
+        },
+        mappingService: { getByCustomerId: () => null },
+        cache: null,
+        icmpAdapter: mockIcmp,
+        repository: new MonitoringRepository(),
+        clock,
+        setTimeout: () => ({ cancel: () => {} }),
+      }, CONFIG);
+
+      await engine.runIcmpCycle();
+      let state = monitoringRepository.findById(
+        customerRepository.findByClientId('icmp1')!.id
+      );
+      expect(state!.stableHealth).toBe('UNKNOWN');
+      expect(state!.consecutiveCount).toBe(0);
+      expect(state!.latestObservation).toBe('UNKNOWN');
+
+      await engine.runIcmpCycle();
+      state = monitoringRepository.findById(
+        customerRepository.findByClientId('icmp1')!.id
+      );
+      expect(state!.stableHealth).toBe('UNKNOWN');
+      expect(state!.consecutiveCount).toBe(0);
+    });
   });
 });
 
