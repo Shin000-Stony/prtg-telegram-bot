@@ -62,6 +62,21 @@ describe('Matcher utilities', () => {
       expect(normalizeName('MikroTik-RB')).toBe('mikrotik rb');
       expect(normalizeName('Client_001')).toBe('client 001');
     });
+
+    it('preserves IPv4 addresses as single tokens', () => {
+      expect(normalizeName('123.231.246.163')).toBe('123.231.246.163');
+      expect(normalizeName('DC TEKNO INET (123.231.246.163]')).toBe('dc tekno inet 123.231.246.163');
+    });
+
+    it('preserves dots within tokens (hostnames, version strings)', () => {
+      expect(normalizeName('router.dc1.local')).toBe('router.dc1.local');
+      expect(normalizeName('Server-v2.0')).toBe('server v2.0');
+    });
+
+    it('normalizes invalid and partial IP-like strings consistently', () => {
+      expect(normalizeName('999.999.999.999')).toBe('999.999.999.999');
+      expect(normalizeName('1.2.3')).toBe('1.2.3');
+    });
   });
 
   describe('tokenize', () => {
@@ -69,6 +84,10 @@ describe('Matcher utilities', () => {
       expect(tokenize('HENGJAYA Data Center')).toEqual(['hengjaya', 'data', 'center']);
       expect(tokenize('Client-11-Server')).toEqual(['client', '11', 'server']);
       expect(tokenize('  ')).toEqual([]);
+    });
+
+    it('preserves IPv4 addresses as single tokens', () => {
+      expect(tokenize('DC TEKNO INET (123.231.246.163]')).toEqual(['dc', 'tekno', 'inet', '123.231.246.163']);
     });
   });
 
@@ -133,6 +152,18 @@ describe('Matcher utilities', () => {
     it('rejects low Jaccard', () => {
       const r = calculateNameMatch('HENGJAYA', 'UNRELATED');
       expect(r.partial).toBe(false);
+    });
+
+    it('does not false-positive on different IP addresses', () => {
+      const r = calculateNameMatch('123.231.246.163', '123.231.246.164');
+      expect(r.exact).toBe(false);
+      expect(r.partial).toBe(false);
+    });
+
+    it('detects exact match when IP addresses are identical', () => {
+      const r = calculateNameMatch('DC TEKNO INET (123.231.246.163]', 'DC TEKNO INET (123.231.246.163]');
+      expect(r.exact).toBe(true);
+      expect(r.jaccard).toBe(1);
     });
   });
 
@@ -258,6 +289,18 @@ describe('Conservative Matcher (runMatcher)', () => {
       }
     });
 
+    it('suggests exact name match with IP address in both names', () => {
+      const decision = runMatcher({
+        ...baseInput,
+        customer: makeCustomer({ name: 'DC TEKNO INET (123.231.246.163]' }),
+        inventory: [makeCandidate({ deviceName: 'DC TEKNO INET (123.231.246.163]', objectId: 4036 })],
+      });
+      expect(decision.kind).toBe('suggestions');
+      if (decision.kind === 'suggestions') {
+        expect(decision.candidates[0].confidence).toBe(0.9);
+      }
+    });
+
     it('suggests partial name match with Jaccard >=0.6 (0.65)', () => {
       const decision = runMatcher({
         ...baseInput,
@@ -309,6 +352,36 @@ describe('Conservative Matcher (runMatcher)', () => {
         inventory: [makeCandidate({ deviceName: 'UNRELATED-DEVICE', objectId: 9999 })],
       });
       expect(decision.kind).toBe('unresolved');
+    });
+
+    it('does not false-positive on different IP addresses alone', () => {
+      const decision = runMatcher({
+        ...baseInput,
+        customer: makeCustomer({ clientId: '001234', name: '123.231.246.163' }),
+        inventory: [makeCandidate({ deviceName: '123.231.246.164', objectId: 4036 })],
+      });
+      expect(decision.kind).toBe('unresolved');
+    });
+
+    it('does not auto-map when customer and device differ only by IP octet', () => {
+      const decision = runMatcher({
+        ...baseInput,
+        customer: makeCustomer({ clientId: '001234', name: 'DC TEKNO INET (123.231.246.163]' }),
+        inventory: [makeCandidate({ deviceName: 'DC TEKNO INET (123.231.246.164]', objectId: 4036 })],
+      });
+      expect(decision.kind).not.toBe('automatic');
+    });
+
+    it('resolves to suggestions (not automatic) when only IP octets differ in shared prefix', () => {
+      const decision = runMatcher({
+        ...baseInput,
+        customer: makeCustomer({ clientId: '001234', name: 'DC TEKNO INET (123.231.246.163]' }),
+        inventory: [makeCandidate({ deviceName: 'DC TEKNO INET (123.231.246.164]', objectId: 4036 })],
+      });
+      expect(decision.kind).toBe('suggestions');
+      if (decision.kind === 'suggestions') {
+        expect(decision.candidates[0].confidence).toBe(0.65);
+      }
     });
   });
 

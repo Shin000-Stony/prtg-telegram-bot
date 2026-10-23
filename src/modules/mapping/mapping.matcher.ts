@@ -13,7 +13,7 @@ function normalizeName(str: string): string {
   return str
     .normalize('NFKC')
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/[^\p{L}\p{N}.]+/gu, ' ')
     .trim()
     .replace(/\s+/g, ' ');
 }
